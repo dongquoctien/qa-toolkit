@@ -17,9 +17,14 @@ Both pieces share two JSON files: **`qa-profile.json`** (project conventions) an
 
 ### Extension
 
-1. Open `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select this repo root.
-2. Pin the **QA Annotator** icon to the toolbar.
-3. (Optional) Click the icon → **Settings** → import a `qa-profile.json` from any project, then optionally import its `qa-figma-tree.json`.
+**For QA team (no git, no clone):** download the latest ZIP from [Releases](https://github.com/dongquoctien/qa-annotator-extension/releases/latest), unzip, then in Chrome:
+1. Open `chrome://extensions` → enable **Developer mode**.
+2. Click **Load unpacked** → select the unzipped folder.
+3. Pin the **QA Annotator** icon to the toolbar.
+
+**For devs (clone + load source):** clone this repo, then **Load unpacked** → select the repo root.
+
+Either way: click the icon → **Settings** → import a `qa-profile.json` from any project, then optionally import its `qa-figma-tree.json`.
 
 Without imports, the extension uses the bundled empty profile and works on any URL — just no source mapping or Figma auto-fill. See [`docs/INSTALL.md`](docs/INSTALL.md) for the full workflow + storage layout.
 

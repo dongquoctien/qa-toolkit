@@ -2,7 +2,16 @@
 
 How to ship the extension and the plugin to teammates / production.
 
-> Status: both pieces are Phase 1 / internal. No Web Store publish, no Claude Code marketplace listing yet.
+> Status: both pieces are Phase 1 / internal. Plugin marketplace install is live. Extension distributed via GitHub Releases (load unpacked); Chrome Web Store not yet.
+
+## Quickstart
+
+| What you want to do | How |
+|---|---|
+| Share the extension with QA team | `git tag v0.X.0 && git push origin v0.X.0` → CI builds + uploads to release. Share `https://github.com/dongquoctien/qa-annotator-extension/releases/latest` |
+| Share the plugin with devs | They run `/plugin marketplace add dongquoctien/qa-annotator-extension` then `/plugin install qa-tooling@qa-annotator` |
+| Build extension ZIP locally | `node scripts/package-extension.mjs` → `dist/qa-annotator-extension-v<ver>.zip` |
+| Bump version | Edit `manifest.json#version` AND `plugins/qa-tooling/plugin.json#version` AND `.claude-plugin/marketplace.json#metadata.version` AND `#plugins[0].version`, commit, then tag |
 
 ---
 
@@ -23,15 +32,39 @@ How to ship the extension and the plugin to teammates / production.
 2. `chrome://extensions` → click the **Reload** icon on the extension card.
 3. Refresh any open page where the inspector is active.
 
-### Bundling for distribution
-The repo ships with a packaging script that uses git to ZIP only the runtime files:
+### Distribution via GitHub Releases (recommended)
+
+The fastest way to ship to a team:
 
 ```bash
-./scripts/package-extension.sh                 # version pulled from manifest.json
-./scripts/package-extension.sh 0.2.0           # override version
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+A GitHub Actions workflow ([`.github/workflows/release.yml`](../.github/workflows/release.yml)) catches the tag, packages the extension, and uploads the ZIP as a release asset. Team members download from:
+
+```
+https://github.com/dongquoctien/qa-annotator-extension/releases/latest
+```
+
+The workflow:
+1. Reads `manifest.json#version` and verifies it matches the tag (fails the build otherwise — keeps versions in sync).
+2. Runs `node scripts/package-extension.mjs` to produce `dist/qa-annotator-extension-v<version>.zip`.
+3. Creates the release if it doesn't exist (`--generate-notes` writes a changelog from commits since last tag), or uploads the ZIP to an existing release with `--clobber`.
+
+You can also run the workflow manually via `Actions → Release extension → Run workflow` — that path uploads the ZIP as a 7-day artifact instead of a permanent release asset (useful for previewing).
+
+### Local packaging (for testing before release)
+
+```bash
+node scripts/package-extension.mjs              # version pulled from manifest.json
+node scripts/package-extension.mjs 0.2.0        # override version
+# or via the bash wrapper:
+./scripts/package-extension.sh
 ```
 
 Output: `dist/qa-annotator-extension-v<version>.zip` containing `manifest.json`, `src/`, `assets/`, `README.md`. The `plugins/`, `docs/`, `scripts/`, and root markdown files are excluded. Recipient unzips → load unpacked from the unzipped folder.
+
+> The packager is pure Node — no `zip` CLI required, works on Windows / macOS / Linux. It uses the same store-mode ZIP writer as the runtime ZIP export (`src/lib/zip-store.js`).
 
 ---
 
