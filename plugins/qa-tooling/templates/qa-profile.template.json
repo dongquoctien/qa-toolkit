@@ -1,0 +1,63 @@
+{
+  "$schema": "qa-profile-v1",
+  "id": "{{id}}",
+  "name": "{{name}}",
+  "version": "1.0.0",
+  "createdAt": "{{createdAt}}",
+  "updatedAt": "{{updatedAt}}",
+
+  "urlPatterns": [
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*"
+  ],
+
+  "framework": {
+    "type": "{{frameworkType}}",
+    "version": "{{frameworkVersion}}"
+  },
+
+  "conventions": {
+    "sectionAttribute": "data-section",
+    "i18nKeyAttribute": "data-i18n-key"
+  },
+
+  "localeStrategy": {
+    "type": "url-prefix",
+    "supportedLocales": [],
+    "defaultLocale": "en",
+    "prefixDefaultLocale": true
+  },
+
+  "sections": [],
+
+  "pages": [],
+
+  "jira": {
+    "projectKey": "{{jiraProjectKey}}",
+    "defaultParent": "{{jiraDefaultParent}}",
+    "defaultMode": "subtasks",
+    "defaultLabels": ["qa", "visual-fidelity", "qa-annotator"],
+    "severityToPriority": {
+      "critical": "Highest",
+      "major": "High",
+      "minor": "Medium",
+      "trivial": "Low"
+    }
+  },
+
+  "figma": {
+    "fileKey": "{{figmaFileKey}}",
+    "fileSlug": "{{figmaFileSlug}}",
+    "linkTemplate": "https://www.figma.com/design/{fileKey}/{fileSlug}?node-id={nodeId}"
+  },
+
+  "screenshots": {
+    "githubRawBase": "{{githubRawBase}}",
+    "branch": "{{branch}}"
+  },
+
+  "issueTemplates": {
+    "defaultSeverity": "minor",
+    "defaultType": "visual"
+  }
+}
