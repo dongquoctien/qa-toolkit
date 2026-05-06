@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>QA Annotator</title>
+<link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <strong>QA Annotator</strong>
+    <a href="#" id="open-settings">Settings</a>
+  </header>
+
+  <section class="row row-profile">
+    <label for="profile">Profile</label>
+    <select id="profile"></select>
+  </section>
+
+  <section class="row row-toggle">
+    <button id="toggle" class="primary">Start Inspector</button>
+  </section>
+
+  <section class="row row-stats">
+    <span class="count">Issues: <strong id="count">0</strong></span>
+    <span class="exports">
+      <button id="export-json" title="Export JSON">JSON</button>
+      <button id="export-md" title="Export Markdown">MD</button>
+      <button id="export-zip" title="Export ZIP (with screenshots)">ZIP</button>
+    </span>
+  </section>
+
+  <section class="row row-clear">
+    <button id="clear" class="danger">Clear all issues</button>
+  </section>
+
+  <footer>
+    <span class="footer-line" id="active-info"></span>
+    <span class="footer-line">Stored in <code>chrome.storage.local</code> · Exports go to your Downloads folder</span>
+  </footer>
+
+  <script src="../lib/messages.js"></script>
+  <script src="../lib/zip-store.js"></script>
+  <script src="../lib/exporter.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

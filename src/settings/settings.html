@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>QA Annotator — Settings</title>
+<link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <header>
+    <h1>QA Annotator — Profiles</h1>
+    <p>
+      Profiles describe a project's URL patterns, framework, locale strategy, and Jira / Figma defaults.
+      Generate one with the <code>/qa:init</code> Claude Code plugin and import it here.
+    </p>
+    <p class="header-links">
+      <a href="https://github.com/dongquoctien/qa-annotator-extension" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.18c-3.2.7-3.88-1.36-3.88-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.16 1.17.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.2-1.48 3.16-1.17 3.16-1.17.62 1.57.23 2.73.11 3.02.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.07.78 2.16v3.2c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+        GitHub repository
+      </a>
+      <span class="sep">·</span>
+      <a href="https://github.com/dongquoctien/qa-annotator-extension/blob/main/plugins/qa-tooling/README.md" target="_blank" rel="noopener">
+        Claude Code plugin setup
+      </a>
+      <span class="sep">·</span>
+      <a href="https://github.com/dongquoctien/qa-annotator-extension/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">
+        Extension install guide
+      </a>
+    </p>
+  </header>
+
+  <section class="card">
+    <h2>Import profile</h2>
+    <p>Upload a <code>qa-profile.json</code> file (or paste JSON). It will be validated and saved.</p>
+    <div class="row">
+      <input id="file" type="file" accept="application/json,.json" />
+      <button id="paste-toggle" type="button">…or paste JSON</button>
+    </div>
+    <textarea id="paste" placeholder='Paste profile JSON here'></textarea>
+    <div class="row">
+      <label><input id="make-active" type="checkbox" checked /> Set as active after import</label>
+      <button id="import" class="primary" type="button">Import</button>
+    </div>
+    <pre id="import-result"></pre>
+  </section>
+
+  <section class="card">
+    <h2>Saved profiles</h2>
+    <p id="active-info"></p>
+    <table id="profiles">
+      <thead><tr><th>ID</th><th>Name</th><th>Framework</th><th>Locales</th><th>Jira</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Figma frame tree</h2>
+    <p>
+      The plugin produces <code>docs/qa/qa-figma-tree.json</code> via <code>/qa:figma-sync</code>.
+      Import it here to enable per-element auto-fill of Figma deeplinks.
+      Each tree is bound to a profile — the file's <code>fileKey</code> must match the profile's <code>figma.fileKey</code>.
+    </p>
+
+    <div class="row">
+      <label for="tree-profile-select">Profile</label>
+      <select id="tree-profile-select"></select>
+    </div>
+    <div class="row">
+      <input id="tree-file" type="file" accept="application/json,.json" />
+      <button id="tree-import" class="primary" type="button">Import tree</button>
+      <span id="tree-status" class="muted"></span>
+    </div>
+
+    <table id="trees">
+      <thead><tr><th>Profile</th><th>Figma file</th><th>Crawled</th><th>Nodes</th><th>Size</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Theme color</h2>
+    <p>One color drives the whole extension: inspector outline, multi-pick rings, hover tooltip, captured-screenshot border, AND the popup / modal / settings UI accents. Useful when the default conflicts with the site's own UI, or for color-coding QA conventions across projects.</p>
+    <div class="row appearance-row">
+      <div class="swatches" id="swatches" role="radiogroup" aria-label="Inspector color presets">
+        <button type="button" class="swatch" data-color="#ec4899" style="--c:#ec4899" title="Pink (default)" aria-label="Pink"></button>
+        <button type="button" class="swatch" data-color="#ef4444" style="--c:#ef4444" title="Red" aria-label="Red"></button>
+        <button type="button" class="swatch" data-color="#f97316" style="--c:#f97316" title="Orange" aria-label="Orange"></button>
+        <button type="button" class="swatch" data-color="#22c55e" style="--c:#22c55e" title="Green" aria-label="Green"></button>
+        <button type="button" class="swatch" data-color="#3b82f6" style="--c:#3b82f6" title="Blue" aria-label="Blue"></button>
+        <button type="button" class="swatch" data-color="#8b5cf6" style="--c:#8b5cf6" title="Purple" aria-label="Purple"></button>
+      </div>
+      <label class="custom-color">
+        Custom
+        <input type="color" id="custom-color" value="#ec4899" />
+      </label>
+      <div class="preview" id="color-preview" aria-hidden="true">
+        <span class="preview-outline"></span>
+        <span class="preview-text">Element preview</span>
+      </div>
+    </div>
+    <p id="color-status" class="muted"></p>
+  </section>
+
+  <script src="../lib/messages.js"></script>
+  <script src="../profile/profile-validator.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

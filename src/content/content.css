@@ -1,0 +1,449 @@
+/* QA Annotator — in-page UI.
+   Strategy: scope every rule under .qa-ext-ui or specific overlay IDs and use
+   high z-index. !important keeps host pages from overriding our styles. */
+
+:root {
+  --qa-bg: #ffffff;
+  --qa-fg: #111827;
+  --qa-muted: #6b7280;
+  --qa-line: #e5e7eb;
+  --qa-soft: #f9fafb;
+  --qa-soft-2: #f3f4f6;
+  --qa-accent: #ec4899;       /* pink-500 */
+  --qa-accent-hover: #db2777; /* pink-600 */
+  --qa-danger: #ef4444;
+  --qa-radius: 10px;
+  --qa-radius-sm: 6px;
+  --qa-shadow: 0 12px 32px -8px rgba(0,0,0,0.18), 0 4px 12px -2px rgba(0,0,0,0.08);
+}
+
+#qa-inspector-highlight,
+#qa-inspector-tooltip,
+#qa-inspector-multi-overlay {
+  position: absolute !important;
+  top: 0; left: 0;
+  pointer-events: none !important;
+  z-index: 2147483646 !important;
+}
+
+#qa-inspector-highlight {
+  outline: 2px solid var(--qa-accent) !important;
+  outline-offset: -2px !important;
+  background: color-mix(in srgb, var(--qa-accent) 6%, transparent) !important;
+  transition: transform 80ms linear, width 80ms linear, height 80ms linear !important;
+  display: none;
+}
+#qa-inspector-multi-overlay {
+  outline: 2px dashed var(--qa-accent) !important;
+  background: color-mix(in srgb, var(--qa-accent) 10%, transparent) !important;
+  display: none;
+}
+#qa-inspector-tooltip {
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  color: #fff !important;
+  background: var(--qa-accent) !important;
+  padding: 2px 6px !important;
+  border-radius: 3px !important;
+  white-space: nowrap !important;
+  display: none;
+}
+
+html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
+
+/* ============== MODAL ============== */
+.qa-ext-ui.qa-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(2px) !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif !important;
+  color: var(--qa-fg) !important;
+  animation: qa-fade-in 120ms ease-out !important;
+}
+@keyframes qa-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.qa-ext-ui .qa-modal {
+  background: var(--qa-bg) !important;
+  width: min(620px, 94vw) !important;
+  max-height: 88vh !important;
+  border-radius: var(--qa-radius) !important;
+  box-shadow: var(--qa-shadow) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  animation: qa-pop 160ms cubic-bezier(.2,.8,.2,1) !important;
+}
+@keyframes qa-pop { from { transform: translateY(8px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.qa-ext-ui .qa-modal-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 16px !important;
+  border-bottom: 1px solid var(--qa-line) !important;
+}
+.qa-ext-ui .qa-id-badge {
+  font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  background: var(--qa-soft-2) !important;
+  color: var(--qa-fg) !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+}
+.qa-ext-ui .qa-vp-chip {
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  background: rgba(236, 72, 153, 0.10) !important;
+  color: #be185d !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(236, 72, 153, 0.25) !important;
+  cursor: help !important;
+  white-space: nowrap !important;
+}
+.qa-ext-ui .qa-modal-meta { color: var(--qa-muted) !important; font-size: 12px !important; flex: 1 !important; }
+
+.qa-ext-ui .qa-icon-btn {
+  background: transparent !important; border: 0 !important;
+  width: 28px !important; height: 28px !important;
+  border-radius: var(--qa-radius-sm) !important;
+  font-size: 18px !important; line-height: 1 !important;
+  color: var(--qa-muted) !important;
+  cursor: pointer !important;
+}
+.qa-ext-ui .qa-icon-btn:hover { background: var(--qa-soft-2) !important; color: var(--qa-fg) !important; }
+
+.qa-ext-ui .qa-modal-body {
+  padding: 16px 18px !important;
+  overflow: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+}
+
+.qa-ext-ui .qa-row { display: flex !important; flex-direction: column !important; gap: 6px !important; }
+.qa-ext-ui .qa-row-2 { flex-direction: row !important; gap: 12px !important; }
+.qa-ext-ui .qa-row-2 > div { flex: 1 !important; min-width: 0 !important; }
+.qa-ext-ui .qa-label-row { display: flex !important; align-items: center !important; justify-content: space-between !important; }
+
+.qa-ext-ui label {
+  font-size: 12px !important; font-weight: 600 !important;
+  color: var(--qa-fg) !important; letter-spacing: 0.01em !important;
+}
+
+.qa-ext-ui input[type=text],
+.qa-ext-ui input[type=url],
+.qa-ext-ui textarea,
+.qa-ext-ui select,
+.qa-ext-ui .qa-expected-row input {
+  width: 100% !important;
+  font: inherit !important;
+  padding: 8px 10px !important;
+  border: 1px solid var(--qa-line) !important;
+  border-radius: var(--qa-radius-sm) !important;
+  background: var(--qa-bg) !important;
+  color: var(--qa-fg) !important;
+  box-sizing: border-box !important;
+  transition: border-color 100ms ease, box-shadow 100ms ease !important;
+}
+.qa-ext-ui input[type=text]:focus,
+.qa-ext-ui input[type=url]:focus,
+.qa-ext-ui textarea:focus,
+.qa-ext-ui select:focus,
+.qa-ext-ui .qa-expected-row input:focus {
+  outline: none !important;
+  border-color: var(--qa-accent) !important;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.15) !important;
+}
+.qa-ext-ui textarea { resize: vertical !important; min-height: 60px !important; }
+
+.qa-ext-ui .qa-elements-list {
+  list-style: none !important; padding: 0 !important; margin: 0 !important;
+  display: flex !important; flex-direction: column !important; gap: 4px !important;
+}
+.qa-ext-ui .qa-elements-list li {
+  display: flex !important; align-items: center !important; gap: 8px !important;
+  padding: 6px 8px !important;
+  background: var(--qa-soft) !important;
+  border: 1px solid var(--qa-line) !important;
+  border-radius: var(--qa-radius-sm) !important;
+}
+.qa-ext-ui .qa-num {
+  display: inline-block !important;
+  min-width: 18px !important; height: 18px !important;
+  background: var(--qa-accent) !important; color: #fff !important;
+  border-radius: 999px !important;
+  font: 600 11px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  text-align: center !important;
+}
+.qa-ext-ui .qa-code-inline,
+.qa-ext-ui .qa-pre {
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  color: var(--qa-fg) !important;
+}
+.qa-ext-ui .qa-code-inline { word-break: break-all !important; flex: 1 !important; }
+.qa-ext-ui .qa-pre {
+  background: var(--qa-soft) !important;
+  padding: 8px 10px !important; border-radius: var(--qa-radius-sm) !important;
+  border: 1px solid var(--qa-line) !important;
+  margin: 0 !important; white-space: pre-wrap !important;
+  max-height: 140px !important; overflow: auto !important;
+}
+
+.qa-ext-ui .qa-computed-multi {
+  display: flex !important; flex-direction: column !important; gap: 8px !important;
+}
+.qa-ext-ui .qa-computed-group-label {
+  font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  color: var(--qa-muted) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+.qa-ext-ui .qa-computed-item {
+  display: flex !important; flex-direction: column !important; gap: 4px !important;
+}
+.qa-ext-ui .qa-computed-head {
+  display: flex !important; align-items: center !important; gap: 8px !important;
+}
+
+/* When multi-pick computed values differ, each row in the Elements list
+   becomes a selectable button that swaps the Computed (actual) pane below. */
+.qa-ext-ui .qa-elements-list .qa-element-row.qa-selectable {
+  cursor: pointer !important;
+  user-select: none !important;
+  transition: border-color 100ms ease, background 100ms ease !important;
+}
+.qa-ext-ui .qa-elements-list .qa-element-row.qa-selectable:hover {
+  border-color: var(--qa-accent) !important;
+  background: var(--qa-bg) !important;
+}
+.qa-ext-ui .qa-elements-list .qa-element-row.qa-selectable:focus-visible {
+  outline: none !important;
+  border-color: var(--qa-accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qa-accent) 20%, transparent) !important;
+}
+.qa-ext-ui .qa-elements-list .qa-element-row.qa-selectable.is-active {
+  background: color-mix(in srgb, var(--qa-accent) 8%, transparent) !important;
+  border-color: var(--qa-accent) !important;
+}
+/* Inactive rows: fade the qa-num pill so the active one stands out */
+.qa-ext-ui .qa-elements-list .qa-element-row.qa-selectable:not(.is-active) .qa-num {
+  background: var(--qa-soft-2) !important;
+  color: var(--qa-muted) !important;
+}
+
+.qa-ext-ui .qa-expected-list { display: flex !important; flex-direction: column !important; gap: 6px !important; }
+.qa-ext-ui .qa-expected-row {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr 28px !important;
+  gap: 6px !important;
+  align-items: center !important;
+}
+.qa-ext-ui .qa-row-remove {
+  background: transparent !important; border: 1px solid var(--qa-line) !important;
+  width: 28px !important; height: 32px !important;
+  border-radius: var(--qa-radius-sm) !important;
+  color: var(--qa-muted) !important; cursor: pointer !important; font-size: 16px !important;
+}
+.qa-ext-ui .qa-row-remove:hover { background: var(--qa-soft-2) !important; color: var(--qa-danger) !important; border-color: var(--qa-danger) !important; }
+
+.qa-ext-ui .qa-link-btn {
+  background: transparent !important; border: 0 !important;
+  color: var(--qa-accent) !important; cursor: pointer !important;
+  font: 600 12px inherit !important;
+  padding: 2px 4px !important;
+}
+.qa-ext-ui .qa-link-btn:hover { text-decoration: underline !important; color: var(--qa-accent-hover) !important; }
+
+.qa-ext-ui .qa-hint { color: var(--qa-muted) !important; font-size: 11px !important; font-weight: 500 !important; }
+
+.qa-ext-ui .qa-figma-chip {
+  display: inline-flex !important; align-items: center !important;
+  gap: 4px !important;
+  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Inter", sans-serif !important;
+  background: color-mix(in srgb, var(--qa-accent) 12%, transparent) !important;
+  color: var(--qa-accent-hover) !important;
+  border: 1px solid color-mix(in srgb, var(--qa-accent) 30%, transparent) !important;
+  padding: 3px 7px !important;
+  border-radius: 999px !important;
+  cursor: help !important;
+}
+.qa-ext-ui .qa-figma-breadcrumb {
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  color: var(--qa-muted) !important;
+  margin-top: 2px !important;
+}
+.qa-ext-ui .qa-figma-breadcrumb code {
+  background: transparent !important;
+  padding: 0 !important;
+  font: inherit !important;
+  color: inherit !important;
+  word-break: break-all !important;
+}
+
+.qa-ext-ui .qa-gallery {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+  gap: 8px !important;
+}
+.qa-ext-ui .qa-gallery-empty {
+  grid-column: 1 / -1 !important;
+  text-align: center !important;
+  padding: 18px 10px !important;
+  color: var(--qa-muted) !important;
+  border: 1px dashed var(--qa-line) !important;
+  border-radius: var(--qa-radius-sm) !important;
+  font-size: 12px !important;
+}
+.qa-ext-ui .qa-thumb {
+  position: relative !important;
+  border: 1px solid var(--qa-line) !important;
+  border-radius: var(--qa-radius-sm) !important;
+  background: var(--qa-soft) !important;
+  overflow: hidden !important;
+  cursor: grab !important;
+  transition: border-color 100ms ease, transform 100ms ease !important;
+}
+.qa-ext-ui .qa-thumb:hover { border-color: var(--qa-accent) !important; }
+.qa-ext-ui .qa-thumb.qa-dragging { opacity: 0.45 !important; cursor: grabbing !important; }
+.qa-ext-ui .qa-thumb.qa-drag-over { border-color: var(--qa-accent) !important; transform: scale(1.02) !important; }
+.qa-ext-ui .qa-thumb img {
+  display: block !important;
+  width: 100% !important; height: 80px !important;
+  object-fit: cover !important;
+  background: #fff !important;
+  cursor: zoom-in !important;
+}
+.qa-ext-ui .qa-thumb-num {
+  position: absolute !important; top: 4px !important; left: 4px !important;
+  background: var(--qa-accent) !important; color: #fff !important;
+  font: 600 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  padding: 1px 6px !important; border-radius: 999px !important;
+}
+.qa-ext-ui .qa-thumb-handle {
+  position: absolute !important; top: 4px !important; right: 28px !important;
+  color: var(--qa-muted) !important;
+  font: 14px/1 inherit !important;
+  background: rgba(255,255,255,0.85) !important;
+  width: 18px !important; height: 18px !important;
+  border-radius: 4px !important;
+  text-align: center !important;
+  line-height: 18px !important;
+  cursor: grab !important;
+}
+.qa-ext-ui .qa-thumb-del {
+  position: absolute !important; top: 4px !important; right: 4px !important;
+  background: rgba(255,255,255,0.92) !important;
+  border: 0 !important;
+  width: 20px !important; height: 20px !important;
+  border-radius: 999px !important;
+  color: var(--qa-danger) !important; cursor: pointer !important;
+  font: 700 12px inherit !important;
+  line-height: 1 !important;
+}
+.qa-ext-ui .qa-thumb-del:hover { background: var(--qa-danger) !important; color: #fff !important; }
+.qa-ext-ui .qa-thumb-meta {
+  display: block !important;
+  font: 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  color: var(--qa-muted) !important;
+  padding: 4px 6px !important;
+  background: rgba(255,255,255,0.7) !important;
+  border-top: 1px solid var(--qa-line) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.qa-ext-ui .qa-gallery-actions {
+  display: flex !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+}
+.qa-ext-ui .qa-gallery-actions button {
+  font: 600 12px inherit !important;
+  padding: 6px 10px !important;
+  border: 1px solid var(--qa-line) !important;
+  border-radius: var(--qa-radius-sm) !important;
+  background: var(--qa-bg) !important;
+  color: var(--qa-fg) !important;
+  cursor: pointer !important;
+}
+.qa-ext-ui .qa-gallery-actions button:hover {
+  border-color: var(--qa-accent) !important;
+  color: var(--qa-accent) !important;
+}
+.qa-ext-ui .qa-gallery-actions button:disabled {
+  opacity: 0.5 !important; cursor: wait !important;
+}
+
+.qa-ext-ui .qa-modal-footer {
+  display: flex !important; justify-content: flex-end !important; gap: 8px !important;
+  padding: 12px 16px !important;
+  border-top: 1px solid var(--qa-line) !important;
+  background: var(--qa-soft) !important;
+}
+.qa-ext-ui .qa-btn-ghost {
+  font: 600 13px inherit !important;
+  padding: 8px 14px !important;
+  border: 1px solid var(--qa-line) !important;
+  border-radius: var(--qa-radius-sm) !important;
+  background: var(--qa-bg) !important;
+  color: var(--qa-fg) !important;
+  cursor: pointer !important;
+}
+.qa-ext-ui .qa-btn-ghost:hover { background: var(--qa-soft-2) !important; }
+.qa-ext-ui .qa-btn-primary {
+  font: 600 13px inherit !important;
+  background: var(--qa-accent) !important; color: #fff !important;
+  border: 0 !important; padding: 8px 18px !important;
+  border-radius: var(--qa-radius-sm) !important; cursor: pointer !important;
+  transition: background 100ms ease !important;
+}
+.qa-ext-ui .qa-btn-primary:hover { background: var(--qa-accent-hover) !important; }
+
+/* ============== FLOATING BAR ============== */
+.qa-ext-ui.qa-bar {
+  position: fixed !important;
+  bottom: 16px !important;
+  right: 16px !important;
+  background: var(--qa-fg) !important;
+  color: #fff !important;
+  padding: 8px 8px 8px 14px !important;
+  border-radius: 999px !important;
+  font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif !important;
+  z-index: 2147483645 !important;
+  display: none;
+  align-items: center !important;
+  gap: 10px !important;
+  box-shadow: var(--qa-shadow) !important;
+}
+.qa-ext-ui.qa-bar.qa-on { display: inline-flex !important; }
+.qa-ext-ui.qa-bar .qa-bar-dot {
+  width: 8px !important; height: 8px !important;
+  background: var(--qa-accent) !important; border-radius: 50% !important;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--qa-accent) 70%, transparent) !important;
+  animation: qa-pulse 1.4s infinite !important;
+}
+@keyframes qa-pulse {
+  0%   { box-shadow: 0 0 0 0  color-mix(in srgb, var(--qa-accent) 60%, transparent); }
+  100% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--qa-accent) 0%,  transparent); }
+}
+.qa-ext-ui.qa-bar .qa-bar-count,
+.qa-ext-ui.qa-bar .qa-bar-multi {
+  background: rgba(255,255,255,0.10) !important;
+  padding: 3px 8px !important; border-radius: 999px !important;
+  font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+.qa-ext-ui.qa-bar .qa-bar-multi { background: var(--qa-accent) !important; }
+.qa-ext-ui.qa-bar button {
+  background: rgba(255,255,255,0.08) !important; color: #fff !important;
+  border: 0 !important; padding: 4px 10px !important; border-radius: 999px !important;
+  cursor: pointer !important; font: inherit !important;
+}
+.qa-ext-ui.qa-bar button:hover { background: rgba(255,255,255,0.18) !important; }
+.qa-ext-ui.qa-bar .qa-bar-done {
+  background: var(--qa-accent) !important;
+}
+.qa-ext-ui.qa-bar .qa-bar-done:hover { background: var(--qa-accent-hover) !important; }
+.qa-ext-ui.qa-bar .qa-bar-done.qa-hidden { display: none !important; }

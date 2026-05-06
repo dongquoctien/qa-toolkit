@@ -1,0 +1,30 @@
+# Build output
+dist/
+*.zip
+
+# Node / dev (none yet, but future-proof)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Temp dirs occasionally used during development testing
+.tmp/
+tmp/

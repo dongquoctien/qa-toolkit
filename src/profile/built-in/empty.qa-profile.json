@@ -1,0 +1,35 @@
+{
+  "$schema": "qa-profile-v1",
+  "id": "empty",
+  "name": "Empty profile (any site)",
+  "description": "Generic profile — no framework adapter, no source mapping. Use this on sites that don't have a project-specific qa-profile.json yet.",
+  "version": "1.0.0",
+  "createdAt": "2026-05-06T00:00:00.000Z",
+  "updatedAt": "2026-05-06T00:00:00.000Z",
+
+  "urlPatterns": ["http://*/*", "https://*/*"],
+
+  "framework": { "type": "generic" },
+
+  "conventions": {
+    "sectionAttribute": "data-section",
+    "i18nKeyAttribute": "data-i18n-key",
+    "componentAttribute": "data-component",
+    "pageAttribute": "data-page"
+  },
+
+  "localeStrategy": {
+    "type": "html-lang",
+    "defaultLocale": "en"
+  },
+
+  "computedProps": [
+    "fontSize", "fontWeight", "lineHeight", "fontFamily",
+    "color", "backgroundColor",
+    "width", "height",
+    "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+    "marginTop", "marginRight", "marginBottom", "marginLeft",
+    "borderRadius", "boxShadow",
+    "display", "gap", "opacity"
+  ]
+}
