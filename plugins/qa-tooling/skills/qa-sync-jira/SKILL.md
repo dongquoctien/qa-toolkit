@@ -19,6 +19,7 @@ Push a `qa-report-v1` JSON into Jira. Used by `/qa:sync`.
     "summaryFormat": "default" | "qa-id" | "title-only",   // default = [VP] title — selector
     "translate":     "en" | "off",                         // default "en" — translate title/note/expected prose
     "bodyFormat":    "list" | "table",                     // default "list" — bold-key list
+    "audience":      "tech" | "leader" | "ba" | "qa" | "ai" | "all",   // default "tech" — see "Audience formats" below
     "dryRun":        false
   }
 }
@@ -375,6 +376,69 @@ The following were observed across machines and must be rejected:
 9. **Merging `expectedPerElement` into the shared `Expected` block** — the override array is rendered as separate `**Expected — (N) overrides**` sub-blocks, not folded into the shared block. Two distinct surfaces preserve QA intent (which fields were chosen as overrides vs. inherited from All). Conversely, do not omit the shared block when overrides exist; both render together.
 
 If you find yourself about to emit any of the above, stop and re-read the per-issue template.
+
+## Audience formats (`config.audience`)
+
+The default audience is `tech` — the per-issue template described above (engineered for Dev + QA workflow, deterministic, byte-equivalent across machines). All other audiences are **opt-in via explicit hint** (`/qa:sync` Step 3f surfaces an `AskUserQuestion` only when the user message contains an audience keyword) or via the `--audience` CLI flag. Most users never see audiences other than `tech`.
+
+### `tech` (default)
+
+The per-issue template defined earlier in this spec. Severity / Type / Page / Locale / Viewport / Breakpoint / Device as bold-key list (or table if `bodyFormat: "table"`); selectors as numbered list with inline code; Expected / Actual as fenced blocks; Figma as Markdown link; Screenshots as plain-text bullet list. **Suitable for:** Dev + QA. **Audience:** technical readers who copy-paste selectors and diff computed CSS.
+
+### `leader`
+
+Severity-first metadata at top, 1-line "What's wrong" prose translation of the CSS delta, "User impact" bullets (visual hierarchy / layout drift / scope / customer reach), and a 3-option "Decision aid" trade-off table (fix now / defer / won't-fix). Selectors and computed CSS are HIDDEN — leader gets a link to the tech-view comment for detail. **Suitable for:** Engineering Manager, PM, triage meetings. **Tone:** executive, scannable, decision-supporting.
+
+### `ba`
+
+Gherkin-style Acceptance Criteria block in a fenced code block (`Feature: ... Scenario: ... Given/When/Then/And/But`) where the "But" clause captures the failing actual outcome. "Business impact" prose with brand/value/channel framing (e.g., "trust narrative weakened", "value proposition lost", "channel: tablet users 15-20% of B2B traffic"). "Linked artifacts" with placeholder for parent user story / Epic. Closes with "Three Amigos sync" suggestion. Selectors and computed CSS hidden. **Suitable for:** Business Analyst, Product Owner, design review. **Tone:** narrative, business intent, collaborative.
+
+### `qa`
+
+QA-test-execution metadata table (Tester / Profile / Reproducibility / Regression risk / Re-test ETA), test steps with `✅` checkmarks (executed), Findings table with Pass/Fail per assertion (e.g., 3/6 passed), "Coverage scope" with `✅`/`⏳` per viewport, "Verification checklist (post-fix)" of 5-7 actionable items, "Sibling tickets to watch" section for regression hunting. **Suitable for:** QA Lead, test execution audit, pre-promotion validation. **Tone:** procedural, audit-trail.
+
+### `ai`
+
+JSON `qa-finding-v1` schema in a fenced code block — every field machine-parseable. Includes `delta` array with `diff_px` / `diff_kind` enums, `fix_hints` block with `candidate_files` / `candidate_classes` / `responsive_hint`, `regression_signals` boolean flags. "Cross-reference contract" table maps each JSON field to its source-of-truth module. Closes with "Suggested AI tasks" instructing downstream code-fix agents / regression classifiers / doc bots. **Caveat:** when emitting JSON, **prefer camelCase over snake_case for keys** — the mcp-atlassian adapter rewrites `_underscore_` identifiers to italic markup `*…*` even inside fenced code blocks (verified live on ELS-1317 comment 14476). If snake_case is required for downstream consumers, escape underscores or document a post-fetch normalize step. **Suitable for:** Claude code-fix agent, regression-classifier bot, doc-generator pipelines. **Tone:** declarative, machine-first.
+
+### `all`
+
+Posts FIVE separate comments — one for each of `tech`, `leader`, `ba`, `qa`, `ai` — in that order, each with a heading prefix `[TECH view]` / `[LEADER view]` / etc. Cross-link via `[See AI view](#)` style references at the bottom of each comment. Use **only when** the same finding needs to reach multiple audiences in parallel (e.g., a critical bug that needs Dev + Leader + BA review simultaneously). Default workflow is single-comment `tech`; `all` is for special cases (post-mortem, root-cause meeting, customer-impact incident).
+
+### Helper: `detectAudienceHint(userMessage)`
+
+Returns `"tech"` | `"leader"` | `"ba"` | `"qa"` | `"ai"` | `"all"` | `null`. Implementation:
+
+```js
+function detectAudienceHint(msg) {
+  if (!msg) return null;
+  const m = msg.toLowerCase();
+  if (/\b(all audiences?|every persona|five views?|all five|every audience)\b/.test(m)) return "all";
+  if (/\b(ai agent|machine[- ]readable|json payload|code[- ]fix bot|structured data|downstream agent|claude agent|llm[- ]friendly)\b/.test(m)) return "ai";
+  if (/\b(ba review|business analyst|acceptance criteria|gherkin|three amigos|user story link|product owner)\b/.test(m)) return "ba";
+  if (/\b(leader review|stakeholder|executive|pm review|product manager|triage view|engineering manager)\b/.test(m)) return "leader";
+  if (/\b(test execution|verification checklist|regression hunt|qa review|coverage scope|re[- ]test plan)\b/.test(m)) return "qa";
+  return null;  // → silent default tech
+}
+```
+
+The detector is intentionally **conservative** — it returns `null` when there's no explicit signal so the silent default `tech` stays in place. False positives (user mentions "leader" in passing without wanting a leader-format) are caught by the `AskUserQuestion` confirmation in Step 3f, which lets the user override back to `tech`.
+
+### Per-audience helper signatures
+
+The skill MUST implement one helper per audience. Each helper returns the full Markdown body for one issue:
+
+```js
+function renderTechBody(issue, profile, config)    // → existing template (this file's main spec)
+function renderLeaderBody(issue, profile, config)  // → metadata table + What's wrong + User impact + Decision aid
+function renderBABody(issue, profile, config)      // → Gherkin block + Business impact + Linked artifacts
+function renderQABody(issue, profile, config)      // → QA metadata + Test steps + Findings + Coverage + Verification
+function renderAIBody(issue, profile, config)      // → JSON qa-finding-v1 + Cross-reference contract + Suggested AI tasks
+```
+
+For `audience === "all"`, call all five helpers and post 5 separate comments. For other modes, call only the matching helper. The summary line (`config.summaryFormat`) and the report-level header (for append modes) are SHARED across audiences — only the per-issue body changes.
+
+> **Live evidence:** all five formats were posted to ELS-1317 on 2026-05-07 (comments 14470 list, 14471 table, 14472 dev, 14473 leader, 14474 BA, 14475 QA, 14476 AI) and verified to render correctly on Atlassian Cloud. The `tech` template is the most defensive against adapter quirks; other audiences inherit the same Markdown safety rules (no `|` in table cells, no wiki image macros, no `\:` escapes, no snake_case in fenced JSON for `ai`).
 
 ## Idempotency
 
