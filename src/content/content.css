@@ -241,6 +241,52 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
   gap: 6px !important;
   align-items: center !important;
 }
+
+/* Expected tabs (multi-pick: All / (1) / (2) / …) */
+.qa-ext-ui .qa-expected-tabs {
+  display: flex !important; flex-wrap: wrap !important; gap: 4px !important;
+  margin-bottom: 8px !important;
+}
+.qa-ext-ui .qa-exp-tab {
+  background: var(--qa-soft-2) !important;
+  border: 1px solid var(--qa-line) !important;
+  color: var(--qa-muted) !important;
+  padding: 4px 10px !important;
+  border-radius: var(--qa-radius-sm) !important;
+  font: 600 12px inherit !important;
+  cursor: pointer !important;
+}
+.qa-ext-ui .qa-exp-tab:hover {
+  color: var(--qa-text) !important;
+  border-color: color-mix(in srgb, var(--qa-accent) 40%, transparent) !important;
+}
+.qa-ext-ui .qa-exp-tab.is-active {
+  background: color-mix(in srgb, var(--qa-accent) 14%, transparent) !important;
+  color: var(--qa-accent-hover) !important;
+  border-color: color-mix(in srgb, var(--qa-accent) 45%, transparent) !important;
+}
+.qa-ext-ui .qa-expected-pane { display: flex !important; flex-direction: column !important; gap: 8px !important; }
+
+/* Override pane (tab !== "all"): add a soft border so users notice they're
+   editing per-element overrides instead of the shared All form. */
+.qa-ext-ui .qa-expected-pane[data-tab]:not([data-tab="all"]) {
+  border: 1px solid color-mix(in srgb, var(--qa-accent) 35%, transparent) !important;
+  background: color-mix(in srgb, var(--qa-accent) 6%, transparent) !important;
+  border-radius: var(--qa-radius-sm) !important;
+  padding: 10px !important;
+}
+
+/* Per-element override pane: heading shows the target selector under the label */
+.qa-ext-ui .qa-exp-head {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+  font-size: 12px !important;
+}
+.qa-ext-ui .qa-exp-head-label {
+  font-weight: 600 !important; color: var(--qa-text) !important;
+}
 .qa-ext-ui .qa-row-remove {
   background: transparent !important; border: 1px solid var(--qa-line) !important;
   width: 28px !important; height: 32px !important;

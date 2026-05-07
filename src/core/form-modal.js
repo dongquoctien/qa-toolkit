@@ -38,6 +38,23 @@
       // Working state lives here so handlers can mutate it without harvesting on every change.
       let shots = Array.isArray(issue.screenshots) ? [...issue.screenshots] : [];
 
+      // Expected model — shared (All) + per-element overrides. For single-pick,
+      // overrides is null and the tabs UI is not rendered.
+      const elementsAll = (issue.elements && issue.elements.length > 0)
+        ? issue.elements
+        : (issue.element ? [issue.element] : []);
+      const isMultiPick = elementsAll.length > 1;
+      const expectedModel = {
+        // Strip figma* fields from shared display rows; the figma input owns those.
+        sharedRows: extractRowsFromExpected(issue.expected),
+        overrides: isMultiPick
+          ? (Array.isArray(issue.expectedPerElement) && issue.expectedPerElement.length === elementsAll.length
+              ? issue.expectedPerElement.map((o) => o ? { ...o } : null)
+              : elementsAll.map(() => null))
+          : null,
+        activeTab: 'all'   // 'all' | 0 | 1 | 2 ...
+      };
+
       const finish = (result) => {
         overlay.remove();
         document.removeEventListener('keydown', onKey, true);
@@ -47,7 +64,11 @@
 
       $$('.qa-cancel').forEach((btn) => btn.addEventListener('click', () => finish(null)));
       overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
-      $('.qa-save').addEventListener('click', () => finish(harvest(overlay, issue, shots)));
+      $('.qa-save').addEventListener('click', () => {
+        // Final harvest of the active expected pane before save.
+        harvestActivePane(overlay, expectedModel);
+        finish(harvest(overlay, issue, shots, expectedModel));
+      });
 
       // Computed tabs (only present when multi-pick + values differ)
       const elementsForTabs = issue.elements && issue.elements.length > 1 ? issue.elements : [issue.element];
@@ -58,13 +79,10 @@
 
       // Property combo
       $('.qa-prop-datalist').innerHTML = COMMON_PROPS.map((p) => `<option value="${p}"></option>`).join('');
-      $('.qa-add-row').addEventListener('click', () => {
-        addExpectedRow($('.qa-expected-list'), '', '', getActualMap(issue));
-      });
-      $('.qa-expected-list').addEventListener('click', (e) => {
-        const btn = e.target.closest('.qa-row-remove');
-        if (btn) btn.closest('.qa-expected-row')?.remove();
-      });
+
+      // Expected tabs (multi-pick only) + initial pane render
+      bindExpectedTabs(overlay, issue, elementsAll, expectedModel);
+      renderExpectedPane(overlay, issue, elementsAll, expectedModel);
 
       // Image gallery
       const renderGallery = () => {
@@ -176,12 +194,6 @@
       });
       $('.qa-upload').addEventListener('click', () => $('.qa-upload-input').click());
 
-      // Pre-fill default expected rows
-      const list = $('.qa-expected-list');
-      const actuals = getActualMap(issue);
-      addExpectedRow(list, 'font-size', '', actuals);
-      addExpectedRow(list, 'font-weight', '', actuals);
-
       renderGallery();
       setTimeout(() => $('.qa-title')?.focus(), 0);
     });
@@ -222,7 +234,7 @@
     listEl.appendChild(row);
   }
 
-  function harvest(root, issue, shots) {
+  function harvest(root, issue, shots, expectedModel) {
     const $ = (sel) => root.querySelector(sel);
     const get = (sel) => $(sel)?.value ?? '';
     const out = { ...issue };
@@ -231,10 +243,11 @@
     out.type     = get('.qa-type');
     out.note     = get('.qa-note');
 
+    // Build shared expected from model.sharedRows + figma fields.
     const expected = {};
-    for (const row of root.querySelectorAll('.qa-expected-row')) {
-      const k = row.querySelector('.qa-exp-key').value.trim();
-      const v = row.querySelector('.qa-exp-val').value.trim();
+    for (const { key, value } of expectedModel.sharedRows) {
+      const k = (key || '').trim();
+      const v = (value || '').trim();
       if (k && v) expected[k] = v;
     }
     const figmaLink = get('.qa-figma-link').trim();
@@ -251,10 +264,45 @@
     }
     out.expected = expected;
 
+    // Per-element overrides (multi-pick only). Strip figma* keys, drop empty
+    // entries down to null so the array stays sparse and exporters can skip.
+    if (Array.isArray(expectedModel.overrides)) {
+      out.expectedPerElement = expectedModel.overrides.map((entry) => {
+        if (!entry) return null;
+        const clean = {};
+        for (const [k, v] of Object.entries(entry)) {
+          if (!k || !v) continue;
+          if (k.startsWith('figma')) continue;       // figma fields are shared-only
+          clean[k] = v;
+        }
+        return Object.keys(clean).length === 0 ? null : clean;
+      });
+    } else {
+      delete out.expectedPerElement;
+    }
+
     out.screenshots = shots;
     out.screenshot = shots[0] || null; // back-compat alias for export
     out.updatedAt = new Date().toISOString();
     return out;
+  }
+
+  // Convert issue.expected into [{key, value}] rows for the shared (All) pane,
+  // dropping figma* keys (those are owned by the figma-link input).
+  function extractRowsFromExpected(expected) {
+    const rows = [];
+    if (expected && typeof expected === 'object') {
+      for (const [k, v] of Object.entries(expected)) {
+        if (k.startsWith('figma')) continue;
+        rows.push({ key: k, value: String(v ?? '') });
+      }
+    }
+    if (rows.length === 0) {
+      // Sensible defaults when the issue has no expected yet (matches old UX).
+      rows.push({ key: 'font-size', value: '' });
+      rows.push({ key: 'font-weight', value: '' });
+    }
+    return rows;
   }
 
   function renderHtml(issue) {
@@ -331,7 +379,8 @@
               <label>Expected (Figma / spec)</label>
               <button class="qa-add-row qa-link-btn" type="button">+ Add property</button>
             </div>
-            <div class="qa-expected-list"></div>
+            ${elements.length > 1 ? renderExpectedTabsStrip(elements) : ''}
+            <div class="qa-expected-pane" data-tab="all"></div>
             <datalist id="qa-prop-options" class="qa-prop-datalist"></datalist>
           </div>
 
@@ -441,6 +490,126 @@
   }
   function escape(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ─── Expected tabs widget (multi-pick) ────────────────────────────────────
+  // The widget reuses one `.qa-expected-pane` container and swaps its content
+  // when the active tab changes. Persistence lives in `expectedModel`:
+  //   sharedRows: [{key, value}, ...]              ← All tab
+  //   overrides:  [null | {key:val, ...}, ...]     ← (i) tabs, length = elements
+  // Single-pick: overrides is null, the tabs strip is not rendered, and the
+  // pane only ever holds the shared rows.
+
+  function renderExpectedTabsStrip(elements) {
+    const all = `<button class="qa-exp-tab is-active" type="button" data-tab="all">All</button>`;
+    const perEl = elements.map((_, i) =>
+      `<button class="qa-exp-tab" type="button" data-tab="${i}">(${i + 1})</button>`
+    ).join('');
+    return `<div class="qa-expected-tabs" role="tablist">${all}${perEl}</div>`;
+  }
+
+  function bindExpectedTabs(root, issue, elements, model) {
+    const tabsEl = root.querySelector('.qa-expected-tabs');
+    const pane = root.querySelector('.qa-expected-pane');
+    const addBtn = root.querySelector('.qa-add-row');
+
+    // Add-property button always targets the active tab.
+    addBtn.addEventListener('click', () => {
+      const list = pane.querySelector('.qa-expected-list');
+      if (!list) return;
+      addExpectedRow(list, '', '', getActualMap(issue));
+    });
+
+    // Remove-row delegation lives on the pane (shared across re-renders).
+    pane.addEventListener('click', (e) => {
+      const btn = e.target.closest('.qa-row-remove');
+      if (btn) btn.closest('.qa-expected-row')?.remove();
+    });
+
+    if (!tabsEl) return;   // single-pick: no tabs
+    tabsEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('.qa-exp-tab');
+      if (!btn) return;
+      const next = btn.dataset.tab === 'all' ? 'all' : parseInt(btn.dataset.tab, 10);
+      if (next === model.activeTab) return;
+      // Harvest current pane into model BEFORE swapping.
+      harvestActivePane(root, model);
+      model.activeTab = next;
+      tabsEl.querySelectorAll('.qa-exp-tab').forEach((b) => {
+        b.classList.toggle('is-active', String(b.dataset.tab) === String(next));
+      });
+      renderExpectedPane(root, issue, elements, model);
+    });
+  }
+
+  function renderExpectedPane(root, issue, elements, model) {
+    const pane = root.querySelector('.qa-expected-pane');
+    pane.dataset.tab = String(model.activeTab);
+    pane.innerHTML = '';
+    const actuals = getActualMap(issue);
+
+    if (model.activeTab === 'all') {
+      const list = document.createElement('div');
+      list.className = 'qa-expected-list';
+      pane.appendChild(list);
+      const rows = model.sharedRows.length ? model.sharedRows : [{ key: '', value: '' }];
+      for (const r of rows) addExpectedRow(list, r.key, r.value, actuals);
+      return;
+    }
+
+    // Per-element override pane: heading + editable overrides only. The shared
+    // (All) values are not re-rendered here — the colored border on the pane
+    // makes it clear the user is editing overrides, not the baseline.
+    const idx = model.activeTab;
+    const sel = elements[idx]?.selector || `(element ${idx + 1})`;
+
+    const head = document.createElement('div');
+    head.className = 'qa-exp-head';
+    head.innerHTML = `<span class="qa-exp-head-label">Override for (${idx + 1})</span><code class="qa-code-inline">${escape(sel)}</code>`;
+    pane.appendChild(head);
+
+    const list = document.createElement('div');
+    list.className = 'qa-expected-list';
+    pane.appendChild(list);
+    const ovr = model.overrides?.[idx];
+    const ovrRows = ovr ? Object.entries(ovr).map(([k, v]) => ({ key: k, value: String(v ?? '') })) : [];
+    if (ovrRows.length === 0) {
+      addExpectedRow(list, '', '', actuals);
+    } else {
+      for (const r of ovrRows) addExpectedRow(list, r.key, r.value, actuals);
+    }
+  }
+
+  // Read whatever rows are currently in the pane and write them back into the
+  // model under the active tab key.
+  function harvestActivePane(root, model) {
+    const pane = root.querySelector('.qa-expected-pane');
+    if (!pane) return;
+    const rows = [];
+    for (const row of pane.querySelectorAll('.qa-expected-row')) {
+      const k = row.querySelector('.qa-exp-key')?.value ?? '';
+      const v = row.querySelector('.qa-exp-val')?.value ?? '';
+      rows.push({ key: k, value: v });
+    }
+    if (model.activeTab === 'all') {
+      // Keep blank trailing rows out of the model — they'd reappear as empty
+      // pre-fill on next render and confuse the inheritance display.
+      model.sharedRows = rows.filter((r) => r.key.trim() || r.value.trim());
+      if (model.sharedRows.length === 0) {
+        // Preserve the empty-state defaults so the next render isn't blank.
+        model.sharedRows = [{ key: 'font-size', value: '' }, { key: 'font-weight', value: '' }];
+      }
+    } else {
+      const idx = model.activeTab;
+      if (!Array.isArray(model.overrides)) return;
+      const obj = {};
+      for (const r of rows) {
+        const k = r.key.trim();
+        const v = r.value.trim();
+        if (k && v && !k.startsWith('figma')) obj[k] = v;
+      }
+      model.overrides[idx] = Object.keys(obj).length === 0 ? null : obj;
+    }
   }
 
   const target = (typeof self !== 'undefined' ? self : window);

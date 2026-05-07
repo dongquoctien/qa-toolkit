@@ -28,3 +28,9 @@ desktop.ini
 # Temp dirs occasionally used during development testing
 .tmp/
 tmp/
+
+# QA workspace artifacts (test reports / extracted zips, consumed locally)
+docs/qa/
+
+# Local Claude Code state
+.claude/

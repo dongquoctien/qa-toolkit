@@ -68,6 +68,12 @@
 
     const id = QA.idGen.nextId(existingIds);
 
+    // Per-element expected overrides. Length-matched to elements[]; entries are
+    // either null (inherit shared `expected`) or a flat key->value record.
+    // Single-pick: undefined — keeps issue.expected as the single source of truth
+    // and avoids serializing an empty array into qa-report-v1.
+    const expectedPerElement = els.length > 1 ? els.map(() => null) : undefined;
+
     return {
       id,
       profileId: profile.id,
@@ -90,6 +96,7 @@
       computedAllIdentical,                // true when length > 1 and every entry equals primary
 
       expected: { ...expectedFigma },
+      expectedPerElement,
       actual: { ...computed },
       delta: {},
 
