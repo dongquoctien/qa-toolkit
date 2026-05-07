@@ -168,6 +168,14 @@ Uses `color-mix(in srgb, var(--qa-accent) ...%, transparent)` in keyframes. Olde
 3. Update `plugins/qa-tooling/README.md` table
 4. If the command produces a new artifact, document the file path in `STATUS.md` and update `/qa:doctor` to check it
 
+### Bump the plugin version
+
+Bumping `plugins/qa-tooling/plugin.json#version` alone is **not enough** — Claude Code's `/plugin update` checks the version in `.claude-plugin/marketplace.json`, not in the plugin's own manifest. If only the plugin manifest is bumped, `/plugin update` will report "already up-to-date" and never pull the new code. Bump **all three** in the same PR:
+
+1. `plugins/qa-tooling/plugin.json` → `version`
+2. `.claude-plugin/marketplace.json` → `metadata.version` AND `plugins[].version` (the `qa-tooling` entry)
+3. After merge, users run `/plugin update qa-tooling` then `/reload-plugins` to apply.
+
 ### Add a new field to qa-profile
 
 1. Update `plugins/qa-tooling/templates/qa-profile.template.json` (with example value)
