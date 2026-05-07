@@ -154,6 +154,9 @@ Capture must happen **before** the modal opens (not after — `chrome.tabs.captu
 ### 9. Auto-pulse animation on the floating bar
 Uses `color-mix(in srgb, var(--qa-accent) ...%, transparent)` in keyframes. Older Chrome (<111) doesn't support `color-mix` in keyframes reliably. Manifest min Chrome is 114, so it's fine — just don't drop the version requirement.
 
+### 10. mcp-atlassian write tools accept Markdown only — never ADF or wiki
+`jira_create_issue` / `jira_update_issue` / `jira_add_comment` run a Markdown→wiki adapter on the body. Passing ADF JSON, raw wiki markup (e.g. `||header||` rows or `!file|thumbnail!` outside a Markdown context), or HTML triggers re-escaping: `!` becomes `\!` (image macro breaks), `*bold*` flips to `_italic_`, `||` headers prepend `||#||` shifting every column. The `qa-sync-jira` skill therefore uses a **bold-key list** for metadata (no `|` anywhere), fenced code blocks for selectors / computed values (where `|` is inert), and the wiki image macro `!filename|thumbnail!` only because it has no Markdown counterpart and passes through verbatim. Screenshots must be uploaded via `jira_update_issue`'s `attachments` parameter (JSON array of absolute paths) so the macro resolves against a real attachment. If the upload step fails, leave the issue created and surface the filename plain-text in the description so a human can drag-and-drop.
+
 ---
 
 ## Common tasks
