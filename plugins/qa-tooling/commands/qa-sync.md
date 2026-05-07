@@ -103,7 +103,7 @@ Only after the user picks "Yes, proceed" may the command call any `jira_create_i
 For each `issue` in `report.issues`:
 
 - Skip if `issue.synced?.jiraKey` already exists (idempotent re-run).
-- Build the Jira description as ADF (Atlassian Document Format) — see `qa-sync-jira` skill for the table layout.
+- Build the Jira description as **Markdown** — see `qa-sync-jira` skill for the layout. **Never pass ADF JSON, raw wiki markup, or HTML**: the MCP server runs a Markdown→wiki adapter on every body and re-escaping breaks `!file!`, `||header||`, and any `|` inside Markdown table cells. The skill template uses a bold-key list (no `|`) and the wiki image macro `!filename|thumbnail!` to dodge those failure modes.
 - Map `issue.severity` → Jira priority via `profile.jira.severityToPriority` if present, else use these defaults:
   - `critical` → Highest
   - `major` → High
@@ -111,12 +111,13 @@ For each `issue` in `report.issues`:
   - `trivial` → Low
 - Apply `profile.jira.defaultLabels` plus `["qa-annotator"]`.
 - Mode-specific:
-  - `subtasks` → `mcp-atlassian.jira_create_issue` with `issuetype: "Sub-task"`, `parent: <key>`.
-  - `tasks` → same call without parent, `issuetype: "Task"`.
-  - `append-comment` (alias `append`) → batch all issues into one ADF comment, single `mcp-atlassian.jira_add_comment` call on parent. Skip the per-issue create loop.
-  - `append-description` → fetch parent's current description with `jira_get_issue`, then call `jira_update_issue` with the original description **preserved on top** + a separator + the QA report block appended below. The separator is a level-2 ADF heading: `QA session — <profile.name> · <report.scope.date>`. If parent has no description, write the QA block as the new description.
+  - `subtasks` → `mcp-atlassian.jira_create_issue` with `issue_type: "Subtask"`, `additional_fields.parent: "<key>"`.
+  - `tasks` → same call without parent, `issue_type: "Task"`.
+  - `append-comment` (alias `append`) → batch all issues into one Markdown comment, single `mcp-atlassian.jira_add_comment` call on parent. Skip the per-issue create loop.
+  - `append-description` → fetch parent's current description with `jira_get_issue` (returned as Markdown by the MCP server), then call `jira_update_issue` with the original description **preserved on top** + a `---` horizontal rule + the QA report block appended below. The QA block opens with a level-2 Markdown heading: `## QA session — <profile.name> · <report.scope.date>`. If parent has no description, write the QA block as the new description.
+- **After every successful create / append**, attach the relevant screenshot PNGs to the same Jira issue (or to the parent in append modes). The skill calls `jira_update_issue` with the `attachments` parameter set to a JSON array of absolute file paths under `docs/qa/reports/<date>/screenshots/`. If a referenced PNG is missing on disk, skip that file (it stays as plain-text in the description) and record it under `attachWarnings`. If the attach call itself fails, leave the ticket in place and record it under `attachFailed` for the summary.
 
-If `--dry-run`, print the planned action for each issue (and the planned description diff for `append-description`) and stop.
+If `--dry-run`, print the planned action for each issue (including the list of PNGs that would be attached) and stop.
 
 ### 6. Update report with sync results
 
@@ -131,17 +132,21 @@ Mode:    subtasks
 Parent:  ELS-1234 — "Implement Home Page V2-EN"
 
 Creating Jira sub-tasks...
-[ 1/15] ISS-001 H2 size mismatch          → ELS-2001
-[ 2/15] ISS-002 Card shadow too light     → ELS-2002
+[ 1/15] ISS-001 H2 size mismatch          → ELS-2001  (2 screenshots attached)
+[ 2/15] ISS-002 Card shadow too light     → ELS-2002  (1 screenshot attached)
 ...
-[15/15] ISS-015 ...                       → ELS-2015
+[15/15] ISS-015 ...                       → ELS-2015  (attach failed — see below)
 
 ✓ 15 created · 0 skipped · 0 failed
+✓ 14 with screenshots attached · 1 attach failed · 0 missing on disk
 ✓ Updated docs/qa/reports/2026-05-06/qa-report.json with synced fields
 ✓ View: https://<workspace>.atlassian.net/browse/ELS-1234
+
+Attach failures (re-upload manually):
+  ELS-2015 ← ISS-015-auto-99412.png
 ```
 
-For failures, print the issue id, the Jira error message, and continue with the next issue. At the end, list failures separately.
+For failures, print the issue id, the Jira error message, and continue with the next issue. At the end, list creation failures and attach failures separately. Attach failures are always recoverable — the issue exists and the description names every PNG so the user knows what to drag in.
 
 ## Idempotency
 
