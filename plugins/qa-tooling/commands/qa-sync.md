@@ -8,16 +8,17 @@ argument-hint: "[report-path] [--mode subtasks|tasks|append-comment|append-descr
 
 Convert a QA Annotator report into Jira issues. The command **never auto-decides** between creating subtasks and editing an existing ticket — it always confirms via `AskUserQuestion` when the choice is ambiguous.
 
-> **Interaction convention:** ALWAYS use the `AskUserQuestion` tool to gather user input. Never write inline `? ...` prompts and wait for a free-text reply. This command emits up to six structured prompts before any Jira write:
+> **Interaction convention:** ALWAYS use the `AskUserQuestion` tool to gather user input. Never write inline `? ...` prompts and wait for a free-text reply. This command emits up to seven structured prompts before any Jira write:
 >
 > 1. **mode** — when `--mode` is missing
 > 2. **parent** — when no parent is resolved
 > 3. **summary format** — defaults to `[VP] title — selector`; only asked if `--summary-format` is missing
 > 4. **body format** — defaults to bold-key list; only asked if `--body-format` is missing AND the user has hinted at wanting a table (e.g. via the AskUserQuestion "Style options" path or asked at run-time). Otherwise silently use `list`.
 > 5. **translate** — defaults to `en` (translate prose to English); only asked if `--translate` is missing AND the report contains non-English title/note (cheap heuristic: any non-ASCII letter in `title || note` across issues). If everything is already English, silently use `en` (it's a pass-through).
-> 6. **parent confirmation** — required even when parent came from a flag.
+> 6. **audience** — defaults to `tech` (the deterministic Dev+QA template). **Only asked if** the user message contains an explicit audience hint (e.g. "leader review", "BA review", "stakeholder", "for PM", "Three Amigos", "executive summary", "JSON payload", "machine readable") OR the `--audience` flag is set to a non-tech value. Otherwise silently use `tech` and do NOT prompt — keeping the default flow zero-friction for the common case.
+> 7. **parent confirmation** — required even when parent came from a flag.
 >
-> Skip a prompt only when its value is already known from flags / report hints / profile defaults / the language heuristic above.
+> Skip a prompt only when its value is already known from flags / report hints / profile defaults / the language or audience heuristic above.
 
 ## Inputs
 
@@ -33,6 +34,7 @@ Flags:
 - `--summary-format default|qa-id|title-only` — pick the Jira summary template without prompting. Default is `default` (= `[VP] title — selector`).
 - `--body-format list|table` — pick the description metadata layout. Default is `list` (bold-key list, safest under all MCP adapters). `table` opts into a 2-column Field/Value Markdown table for short metadata; Selector / Expected / Actual / Figma / Screenshots stay outside the table either way.
 - `--translate en|off` — translate user-authored prose (title, note, expected free-text) to English. Default is `en`. Use `off` to keep the source language verbatim. Field labels are always English regardless. Computed values (px/rgb/url/selector) are never translated.
+- `--audience tech|leader|ba|qa|ai|all` — pick the comment template format. Default is `tech` (Dev+QA deterministic template, the silent default). `leader` = severity-first metadata + decision aid. `ba` = Gherkin Given-When-Then + business impact. `qa` = test execution metadata + verification checklist. `ai` = JSON `qa-finding-v1` payload for downstream agents. `all` = post one comment per persona (5 comments total). **This is a power-user flag** — most users should leave it unset and let the silent `tech` default handle 95% of cases. See Step 3f for when the prompt surfaces.
 - `--dry-run` — print what would be created/updated, do not call MCP write.
 
 **No `--mode` flag → ALWAYS prompt.** There is no implicit default. See Step 3.
@@ -130,6 +132,31 @@ options:
 
 Field labels (`Severity`, `Type`, …) are always English regardless. Selectors / computed CSS / URLs / IDs are never translated. The chosen value is passed to the skill as `config.translate`.
 
+**3f. Audience format (silent default — same pattern as 3d).** If `--audience` is provided, use it. Otherwise:
+
+- Run `detectAudienceHint(userMessage)` — see the helper in the `qa-sync-jira` skill spec. The detector matches case-insensitive keywords in the user's most recent message:
+  - `leader|stakeholder|executive|PM review|product manager|triage view` → `leader`
+  - `BA|business analyst|acceptance criteria|gherkin|three amigos|user story link` → `ba`
+  - `test execution|verification checklist|regression|QA review|coverage scope|re-test` → `qa`
+  - `AI agent|machine readable|JSON payload|code-fix bot|structured data|downstream agent` → `ai`
+  - "all audiences", "every persona", "five views" → `all`
+- If the detector returns `null` → silently set `config.audience = "tech"` and do NOT prompt. **This is the 95% case.**
+- If the detector returns a non-null hint → call `AskUserQuestion` to confirm (do not assume — the user may have referenced the keyword in passing):
+
+```
+header: "Audience"
+question: "Detected audience hint: {detected}. Use a non-default comment format?"
+options:
+  - "{detected} format (Recommended based on your message)"           // → detected
+  - "Tech (Dev + QA) — default deterministic template"                // → tech (the silent default)
+  - "All audiences — post 5 separate comments, one per persona"       // → all
+  - "Cancel sync"                                                     // → abort
+```
+
+The chosen value is passed to the skill as `config.audience`. The skill spec defines per-audience helpers (`renderTechBody`, `renderLeaderBody`, `renderBABody`, `renderQABody`, `renderAIBody`); see `qa-sync-jira/SKILL.md` for the per-audience templates.
+
+> **Why "soft prompt" instead of always asking?** The `tech` template covers Dev + QA workflow, which is 95% of QA→Dev sync traffic. Forcing every user to pick an audience when they don't have a strong preference adds friction and decision fatigue. The detection heuristic surfaces the prompt only when the user has already hinted at a non-default need — see memory `feedback_ask_user_question.md` ("if a value can be inferred from detection, the profile, or git context, do not ask at all"). Power users with explicit audience needs use the `--audience` CLI flag.
+
 ### 4. Verify and confirm parent (skip if mode is `tasks`)
 
 **4a. Verify exists.** Call `mcp-atlassian.jira_get_issue` with the resolved parent key. If it 404s → abort with `fix: parent <KEY> not found in Jira`.
@@ -138,7 +165,7 @@ Field labels (`Severity`, `Type`, …) are always English regardless. Selectors 
 
 ```
 header: "Confirm parent"
-question: "Parent: {KEY} — \"{summary}\" (status: {status}, assignee: {assignee or 'unassigned'}). Mode: {mode} · Summary: {summaryFormat} · Body: {bodyFormat} · Translate: {translate}. Proceed?"
+question: "Parent: {KEY} — \"{summary}\" (status: {status}, assignee: {assignee or 'unassigned'}). Mode: {mode} · Summary: {summaryFormat} · Body: {bodyFormat} · Translate: {translate} · Audience: {audience}. Proceed?"
 options:
   - "Yes, proceed (Recommended)"
   - "Pick a different parent"     // → restart Step 3b prompt
@@ -148,6 +175,8 @@ options:
   - "Change translation"          // → restart Step 3e prompt
   - "Cancel"                      // → abort with no Jira writes
 ```
+
+> The `Audience: {audience}` token in the question line is **always shown** so the user can spot it before any Jira write — even when audience was set by the silent default. If the user wants to change it from the confirmation step, they pick "Cancel" and re-run with `--audience <value>` flag, OR re-trigger the prompt by adding an audience keyword to their next message. Adding "Change audience" as a top-level option here would bloat the option list past 7; use the flag for one-time overrides.
 
 Only after the user picks "Yes, proceed" may the command call any `jira_create_issue` / `jira_add_comment` / `jira_update_issue`. This guard applies even with `--dry-run` so the dry-run summary reflects the user's confirmed choice.
 
