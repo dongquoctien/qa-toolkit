@@ -175,27 +175,45 @@
 
   function pickSectionRoot(tree, variant, sectionName) {
     if (!sectionName || !variant) return null;
+    const sectionIds = variant.sections || [];
 
-    // PRIORITY 1: src code annotation (highest confidence).
-    // Plugin's qa-figma-crawl scanned `// figma:` comments and data-figma-node-id
-    // attrs in section files. If the node it pointed at exists in the tree, use it.
-    const idx = tree.sectionIndex?.[sectionName];
-    if (idx?.figmaNodeId && tree.nodes[idx.figmaNodeId]) {
-      return idx.figmaNodeId;
+    // PRIORITY 1: positional match within the chosen viewport variant via the
+    // `summary` field (== componentName written by qa-figma-crawl at depth 1).
+    // This is viewport-correct: if matcher picked tablet, we return the tablet
+    // section id, not the desktop one.
+    for (const id of sectionIds) {
+      const n = tree.nodes[id];
+      if (!n) continue;
+      const summary = n.s || n.summary;
+      if (summary && summary === sectionName) return id;
     }
 
     // PRIORITY 2: matching Figma layer name to data-section attr.
-    const sectionIds = variant.sections || [];
     for (const id of sectionIds) {
       const n = tree.nodes[id];
-      if (!n || !n.n) continue;
-      if (n.n === sectionName) return id;
-      const a = n.n.replace(/Section$/i, '').toLowerCase();
+      if (!n) continue;
+      const name = n.n || n.name;
+      if (!name) continue;
+      if (name === sectionName) return id;
+      const a = name.replace(/Section$/i, '').toLowerCase();
       const b = (sectionName || '').replace(/Section$/i, '').toLowerCase();
       if (a && a === b) return id;
     }
 
-    // PRIORITY 3: text content match. If sectionIndex.texts contains the
+    // PRIORITY 3: src code annotation from sectionIndex. Only use this if the
+    // referenced node belongs to the chosen viewport — otherwise we'd return
+    // the desktop nodeId for a tablet/mobile match. Skip it when viewport
+    // mismatches and fall through to text cross-ref.
+    const idx = tree.sectionIndex?.[sectionName];
+    if (idx?.figmaNodeId && tree.nodes[idx.figmaNodeId]) {
+      const n = tree.nodes[idx.figmaNodeId];
+      const nodeViewport = n.v || n.viewport;
+      if (!nodeViewport || nodeViewport === variant.viewport) {
+        return idx.figmaNodeId;
+      }
+    }
+
+    // PRIORITY 4: text content match. If sectionIndex.texts contains the
     // hovered element's text, find which section subtree contains a Figma
     // text node carrying that string — that's our section.
     if (idx?.texts?.length) {
