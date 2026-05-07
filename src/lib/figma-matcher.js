@@ -155,11 +155,22 @@
   function pickViewportVariant(page, liveVp) {
     if (!page || !Array.isArray(page.viewports) || page.viewports.length === 0) return null;
     const w = liveVp?.w || 1280;
-    // Pick the variant whose viewportWidth is closest to (and >=) the live width.
-    // Fall back to the largest if none are >= live.
+    // PRIORITY 1: explicit range on the variant (`minWidth` / `maxWidth`). When
+    // the tree author wants e.g. "tablet covers 768..1279, laptop covers
+    // 1280..1919, desktop covers 1920+", they encode it on each variant. This
+    // is the right answer — pick the bucket the live width falls into.
+    const inRange = page.viewports.find((v) => {
+      const min = (v.minWidth ?? 0);
+      const max = (v.maxWidth == null ? Infinity : v.maxWidth);
+      return w >= min && w <= max;
+    });
+    if (inRange) return inRange;
+    // FALLBACK (legacy trees without ranges): pick the LARGEST variant whose
+    // viewportWidth <= live width — i.e. the design that fits inside the live
+    // viewport. Else fall back to the smallest variant.
     const sorted = [...page.viewports].sort((a, b) => (a.viewportWidth || 0) - (b.viewportWidth || 0));
-    const ge = sorted.find((v) => (v.viewportWidth || 0) >= w);
-    return ge || sorted[sorted.length - 1] || null;
+    const le = [...sorted].reverse().find((v) => (v.viewportWidth || 0) <= w);
+    return le || sorted[0] || null;
   }
 
   function pickSectionRoot(tree, variant, sectionName) {
