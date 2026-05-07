@@ -133,6 +133,17 @@
         for (const [k, v] of Object.entries(i.expected)) lines.push(`${k}: ${v}`);
         lines.push('```');
       }
+      // Per-element overrides — render only non-null entries.
+      if (Array.isArray(i.expectedPerElement) && i.expectedPerElement.some((o) => o && Object.keys(o).length)) {
+        i.expectedPerElement.forEach((ovr, idx) => {
+          if (!ovr || Object.keys(ovr).length === 0) return;
+          lines.push('');
+          lines.push(`**Expected — (${idx + 1}) overrides:**`);
+          lines.push('```');
+          for (const [k, v] of Object.entries(ovr)) lines.push(`${k}: ${v}`);
+          lines.push('```');
+        });
+      }
       // Actual (computed) — group identical, list per-element when different.
       const perEl = Array.isArray(i.computedPerElement) ? i.computedPerElement : null;
       if (perEl && perEl.length > 1) {

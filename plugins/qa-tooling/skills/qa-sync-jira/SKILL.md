@@ -216,6 +216,8 @@ The issue description is a **Markdown string** that the MCP server converts to J
 {format(issue.expected)}
 ```
 
+{renderExpectedOverrides(issue)}     ← REQUIRED when issue.expectedPerElement has any non-null entry; otherwise omit
+
 **Actual (computed)**
 {renderActualBlocks(issue, selectors)}
 
@@ -254,6 +256,8 @@ When the user explicitly opts in (via `--body-format table` or the AskUserQuesti
 **Expected**
 {fenced block — same as list mode}
 
+{renderExpectedOverrides — same as list mode; emit only when expectedPerElement has non-null entries}
+
 **Actual (computed)**
 {renderActualBlocks — same as list mode}
 
@@ -284,6 +288,24 @@ _Reported by {report.reporter || "QA Annotator"} · {report.exportedAt}_
 - string → as-is (do NOT translate — Expected values are technical specs)
 - object → `key: val` lines joined by `\n` (keys and values both verbatim)
 - empty / null → `—`
+
+**`renderExpectedOverrides(issue)`** — returns a Markdown string for per-element expected overrides, or empty string when there are none:
+
+- If `issue.expectedPerElement` is missing, not an array, or every entry is `null` / empty → return `""`. The shared **Expected** block above is the only one rendered.
+- Otherwise, for each entry `ovr` at index `idx`:
+  - Skip if `ovr` is `null` or `Object.keys(ovr).length === 0`.
+  - Emit a sub-block:
+    ```md
+    **Expected — ({idx + 1}) overrides**
+    ```
+    {key}: {value}
+    {key}: {value}
+    ```
+    ```
+- Keep blocks separated by a blank line. The numbering aligns with the `**Selector{s}:**` list above so reviewers can cross-reference (e.g. `(2)` here = the 2nd selector).
+- **Do NOT merge `issue.expected` into the override block.** The shared block already conveys the baseline; merging hides the QA author's intent (which fields they meant to override versus inherit). Render shared and overrides as two distinct surfaces.
+- **Do NOT translate** keys or values inside overrides. They are technical CSS, identical to the shared block's rules.
+- Figma-related keys (`figmaLink`, `figmaNodeId`, `figmaBreadcrumb`, …) are guaranteed to be absent from `expectedPerElement` entries — the extension strips them on save. If for any reason one slips through, ignore it.
 
 **`renderActualBlocks(issue, selectors)`** — returns a Markdown string:
 - If `issue.computedPerElement?.length > 1`:
@@ -341,6 +363,7 @@ The following were observed across machines and must be rejected:
 6. **Unencoded `:` in nodeId** — `node-id=3880:2925` instead of `3880%3A2925`. Always encode.
 7. **Wiki image macro re-escaped to Markdown** — emitting `![](file.png)` (Markdown image syntax) gets adapter-mangled to `\![](file.png)`. Use the wiki macro `!filename|thumbnail!` exactly as written in `renderScreenshots`.
 8. **Re-translating per call site** — translate `title` and `note` ONCE at the top of issue processing and reuse the cached value in both summary and heading. Translating twice can produce different strings on different invocations of the same MCP tool.
+9. **Merging `expectedPerElement` into the shared `Expected` block** — the override array is rendered as separate `**Expected — (N) overrides**` sub-blocks, not folded into the shared block. Two distinct surfaces preserve QA intent (which fields were chosen as overrides vs. inherited from All). Conversely, do not omit the shared block when overrides exist; both render together.
 
 If you find yourself about to emit any of the above, stop and re-read the per-issue template.
 

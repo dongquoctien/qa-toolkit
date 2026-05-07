@@ -1,4 +1,6 @@
-# CLAUDE.md — Codebase guide for Claude Code
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Read this when picking up this repo in a future session. It covers architecture, conventions, gotchas, and how to extend each piece without breaking the contract between them.
 
@@ -99,7 +101,7 @@ When Claude Code runs `/qa:figma-sync`, it reads `plugins/qa-tooling/commands/qa
 | `plugins/qa-tooling/plugin.json` | Manifest registering 4 commands + 4 skills. |
 | `plugins/qa-tooling/commands/qa-init.md` | Single largest spec. Auto-detect everything; ≤3 AskUserQuestion prompts. |
 | `plugins/qa-tooling/commands/qa-figma-sync.md` | MCP crawl + src scan. Default = full crawl (no `partial`). `--pages` / `--viewports` narrow → `partial: true`. |
-| `plugins/qa-tooling/commands/qa-sync.md` | Jira ADF builder. Multi-element list, multi-screenshot links, breakpoint+device row. |
+| `plugins/qa-tooling/commands/qa-sync.md` | Jira issue creator (Markdown body, NOT ADF — see Gotcha #10). Multi-element list, multi-screenshot links, breakpoint+device row. |
 | `plugins/qa-tooling/commands/qa-doctor.md` | 16 numbered checks across 5 sections (A Profile / B Source / C Figma tree / D Reports / E MCP). |
 | `plugins/qa-tooling/skills/qa-figma-crawl/SKILL.md` | The biggest skill spec. **Coordinate system** section is critical: descendants are parent-relative (NOT absolute), so accumulate offsets — verified against MCP behavior 2026-05-07. |
 
@@ -156,6 +158,16 @@ Uses `color-mix(in srgb, var(--qa-accent) ...%, transparent)` in keyframes. Olde
 
 ### 10. mcp-atlassian write tools accept Markdown only — never ADF or wiki
 `jira_create_issue` / `jira_update_issue` / `jira_add_comment` run a Markdown→wiki adapter on the body. Passing ADF JSON, raw wiki markup (e.g. `||header||` rows or `!file|thumbnail!` outside a Markdown context), or HTML triggers re-escaping: `!` becomes `\!` (image macro breaks), `*bold*` flips to `_italic_`, `||` headers prepend `||#||` shifting every column. The `qa-sync-jira` skill therefore uses a **bold-key list** for metadata (no `|` anywhere), fenced code blocks for selectors / computed values (where `|` is inert), and the wiki image macro `!filename|thumbnail!` only because it has no Markdown counterpart and passes through verbatim. Screenshots must be uploaded via `jira_update_issue`'s `attachments` parameter (JSON array of absolute paths) so the macro resolves against a real attachment. If the upload step fails, leave the issue created and surface the filename plain-text in the description so a human can drag-and-drop.
+
+### 11. `expectedPerElement` invariants
+
+Multi-pick issues carry a sparse override array `expectedPerElement` alongside the shared `expected`. Three rules the modal, exporter, and Jira skill all depend on:
+
+- **Length matches `elements.length`** when present. Single-pick issues set `expectedPerElement` to `undefined` so it never serializes.
+- **`null` (not `{}`) means "inherit"**. The modal's harvest collapses empty objects to `null`; consumers loop with `Array.isArray(epe) && epe.some(o => o && Object.keys(o).length)` before rendering. An empty object would render as a confusing blank "(N) overrides" section.
+- **No `figma*` keys in overrides**. Figma fields (`figmaLink`, `figmaNodeId`, `figmaBreadcrumb`, `figmaScore`, `figmaViewport`, `figmaAutoMatched`) live only on shared `expected` — there's exactly one Figma anchor per issue. The modal strips these on save; the Jira skill defensively ignores them if a hand-edited report sneaks one in. Don't loosen this on either side.
+
+The Jira skill renders shared and overrides as TWO separate blocks (`**Expected**` and `**Expected — (N) overrides**`). Never merge — the QA author's intent (which fields they chose to override vs. inherit) gets lost when you flatten.
 
 ---
 
