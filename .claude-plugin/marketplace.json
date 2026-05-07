@@ -7,7 +7,7 @@
   },
   "metadata": {
     "description": "QA Annotator — Claude Code plugin + Chrome extension for QA/QC. Plugin auto-detects project stack, crawls Figma, syncs reports to Jira via MCP. Extension lets QA click any element to log a styled issue with a deeplink to the matching Figma frame.",
-    "version": "0.1.2",
+    "version": "0.1.4",
     "homepage": "https://github.com/dongquoctien/qa-annotator-extension"
   },
   "plugins": [
@@ -15,7 +15,7 @@
       "name": "qa-tooling",
       "source": "./plugins/qa-tooling",
       "description": "4 slash commands for QA/QC: /qa:init (auto-detect stack → qa-profile.json), /qa:figma-sync (crawl Figma → qa-figma-tree.json), /qa:doctor (health check), /qa:sync (push QA report to Jira via MCP).",
-      "version": "0.1.2",
+      "version": "0.1.4",
       "author": {
         "name": "itdongquoctien",
         "email": "itdongquoctien@gmail.com"

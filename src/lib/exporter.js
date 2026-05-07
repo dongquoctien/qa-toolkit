@@ -112,6 +112,12 @@
       }
 
       if (i.source?.file) lines.push(`- **Source:** \`${i.source.file}:${i.source.line ?? '?'}\` (${i.source.adapter})`);
+
+      const exp = i.expected || {};
+      if (exp.figmaLink) {
+        const anchor = exp.figmaBreadcrumb || exp.figmaNodeName || 'Open in Figma';
+        lines.push(`- **Figma:** [${anchor}](${exp.figmaLink})`);
+      }
       // Viewport / device line (separate from heading suffix so it shows full detail)
       if (vp.w) {
         const tw = ctx.breakpoint?.all?.tailwind;

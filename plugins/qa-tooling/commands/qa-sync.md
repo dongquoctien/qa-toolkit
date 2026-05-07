@@ -8,7 +8,16 @@ argument-hint: "[report-path] [--mode subtasks|tasks|append-comment|append-descr
 
 Convert a QA Annotator report into Jira issues. The command **never auto-decides** between creating subtasks and editing an existing ticket — it always confirms via `AskUserQuestion` when the choice is ambiguous.
 
-> **Interaction convention:** ALWAYS use the `AskUserQuestion` tool to gather user input. Never write inline `? ...` prompts and wait for a free-text reply. This command emits up to three structured prompts: **(1) mode** when `--mode` is missing, **(2) parent** when no parent is resolved, **(3) parent confirmation** before any Jira write. Skip a prompt only when its value is already known from flags / report hints / profile defaults.
+> **Interaction convention:** ALWAYS use the `AskUserQuestion` tool to gather user input. Never write inline `? ...` prompts and wait for a free-text reply. This command emits up to six structured prompts before any Jira write:
+>
+> 1. **mode** — when `--mode` is missing
+> 2. **parent** — when no parent is resolved
+> 3. **summary format** — defaults to `[VP] title — selector`; only asked if `--summary-format` is missing
+> 4. **body format** — defaults to bold-key list; only asked if `--body-format` is missing AND the user has hinted at wanting a table (e.g. via the AskUserQuestion "Style options" path or asked at run-time). Otherwise silently use `list`.
+> 5. **translate** — defaults to `en` (translate prose to English); only asked if `--translate` is missing AND the report contains non-English title/note (cheap heuristic: any non-ASCII letter in `title || note` across issues). If everything is already English, silently use `en` (it's a pass-through).
+> 6. **parent confirmation** — required even when parent came from a flag.
+>
+> Skip a prompt only when its value is already known from flags / report hints / profile defaults / the language heuristic above.
 
 ## Inputs
 
@@ -21,6 +30,9 @@ Flags:
 - `--mode append-description` — append the QA report block to the **description** of `--parent` via `jira_update_issue` (mutates the parent ticket itself; original description is preserved above the appended block).
 - `--mode append` — alias for `--mode append-comment` (kept for back-compat).
 - `--parent KEY-NN` — override `report.syncHints.suggestedParent` and `profile.jira.defaultParent`.
+- `--summary-format default|qa-id|title-only` — pick the Jira summary template without prompting. Default is `default` (= `[VP] title — selector`).
+- `--body-format list|table` — pick the description metadata layout. Default is `list` (bold-key list, safest under all MCP adapters). `table` opts into a 2-column Field/Value Markdown table for short metadata; Selector / Expected / Actual / Figma / Screenshots stay outside the table either way.
+- `--translate en|off` — translate user-authored prose (title, note, expected free-text) to English. Default is `en`. Use `off` to keep the source language verbatim. Field labels are always English regardless. Computed values (px/rgb/url/selector) are never translated.
 - `--dry-run` — print what would be created/updated, do not call MCP write.
 
 **No `--mode` flag → ALWAYS prompt.** There is no implicit default. See Step 3.
@@ -80,20 +92,61 @@ options:
 
 Never use an inline `? ...` prompt.
 
+**3c. Confirm summary format (REQUIRED when `--summary-format` is absent).** The skill template enforces deterministic body content (English-only labels, no narrative reinterpretation), but the **issue summary line** is the most user-visible field and the one that varied across machines in past runs (e.g. `[QA] ISS-003 — Heading wraps...` vs `[1536×695 · 2xl · @1.25x] Trader check — div.Layout...`). Always call `AskUserQuestion`:
+
+```
+header: "Summary format"
+question: "How should each Jira issue's summary line be built?"
+options:
+  - "[viewport] title — selector  (Recommended — default deterministic form)"   // → default
+  - "[QA] {issueId} — title"                                                    // → qa-id
+  - "title only (shortest, may collide for similar issues)"                     // → title-only
+```
+
+If `--summary-format` is set, use it without prompting. The chosen value is passed to the skill as `config.summaryFormat`. The body template (description) is **never** customized through this prompt — it is fixed by the skill spec.
+
+**3d. Body format (silent default).** If `--body-format` is provided, use it. Otherwise default to `list` and do NOT prompt. Only call `AskUserQuestion` if the user explicitly asked for "table style" / "more compact body" / "có bảng table" in their request, OR if a previous run for this report used `table` (no such state today, so effectively: only when explicitly asked):
+
+```
+header: "Body format"
+question: "How should each issue's metadata block be laid out?"
+options:
+  - "Bold-key list — `**Severity:** minor` per line  (Recommended — safest)"        // → list
+  - "2-column Field/Value table — compact for short metadata"                       // → table
+```
+
+`table` is cosmetic only; Selector/Expected/Actual/Figma/Screenshots layouts are unchanged. The chosen value is passed to the skill as `config.bodyFormat`.
+
+**3e. Translation (silent default).** If `--translate` is provided, use it. Otherwise:
+- Compute a quick heuristic: any non-ASCII letter (`/[^\x00-\x7F]/`) inside `report.issues.map(i => (i.title||"") + " " + (i.note||""))`. If false → silently set `config.translate = "en"` (pass-through, no-op) and do NOT prompt. If true → prompt:
+
+```
+header: "Translation"
+question: "Some issue titles/notes are not in English. Translate to English when posting to Jira?"
+options:
+  - "Yes — translate title/note/note-like fields to English  (Recommended)"   // → en
+  - "No — keep the source language verbatim"                                  // → off
+```
+
+Field labels (`Severity`, `Type`, …) are always English regardless. Selectors / computed CSS / URLs / IDs are never translated. The chosen value is passed to the skill as `config.translate`.
+
 ### 4. Verify and confirm parent (skip if mode is `tasks`)
 
 **4a. Verify exists.** Call `mcp-atlassian.jira_get_issue` with the resolved parent key. If it 404s → abort with `fix: parent <KEY> not found in Jira`.
 
-**4b. Confirm with the user (REQUIRED — do NOT skip even when parent came from a flag).** Print the parent's summary, status, and assignee, then call `AskUserQuestion`:
+**4b. Confirm with the user (REQUIRED — do NOT skip even when parent came from a flag).** Print the parent's summary, status, and assignee, then call `AskUserQuestion`. The question line lists every resolved config value so the user can spot the wrong default before any Jira write:
 
 ```
 header: "Confirm parent"
-question: "Parent ticket: {KEY} — \"{summary}\" (status: {status}, assignee: {assignee or 'unassigned'}). Proceed in mode '{mode}'?"
+question: "Parent: {KEY} — \"{summary}\" (status: {status}, assignee: {assignee or 'unassigned'}). Mode: {mode} · Summary: {summaryFormat} · Body: {bodyFormat} · Translate: {translate}. Proceed?"
 options:
   - "Yes, proceed (Recommended)"
-  - "Pick a different parent"   // → restart Step 3b prompt
-  - "Change mode"               // → restart Step 3a prompt
-  - "Cancel"                    // → abort with no Jira writes
+  - "Pick a different parent"     // → restart Step 3b prompt
+  - "Change mode"                 // → restart Step 3a prompt
+  - "Change summary format"       // → restart Step 3c prompt
+  - "Change body format"          // → restart Step 3d prompt
+  - "Change translation"          // → restart Step 3e prompt
+  - "Cancel"                      // → abort with no Jira writes
 ```
 
 Only after the user picks "Yes, proceed" may the command call any `jira_create_issue` / `jira_add_comment` / `jira_update_issue`. This guard applies even with `--dry-run` so the dry-run summary reflects the user's confirmed choice.
@@ -103,7 +156,9 @@ Only after the user picks "Yes, proceed" may the command call any `jira_create_i
 For each `issue` in `report.issues`:
 
 - Skip if `issue.synced?.jiraKey` already exists (idempotent re-run).
-- Build the Jira description as **Markdown** — see `qa-sync-jira` skill for the layout. **Never pass ADF JSON, raw wiki markup, or HTML**: the MCP server runs a Markdown→wiki adapter on every body and re-escaping breaks `!file!`, `||header||`, and any `|` inside Markdown table cells. The skill template uses a bold-key list (no `|`) and the wiki image macro `!filename|thumbnail!` to dodge those failure modes.
+- Build the Jira description as **Markdown** by following the `qa-sync-jira` skill template **verbatim** — fill placeholders, do not paraphrase, do not invent extra sections, do not translate field labels (English-only). **Never pass ADF JSON, raw wiki markup, or HTML**: the MCP server runs a Markdown→wiki adapter on every body and re-escaping breaks `!file!`, `||header||`, and any `|` inside Markdown table cells. The skill template uses a bold-key list (when `bodyFormat === "list"`) or a 2-col Field/Value table (when `bodyFormat === "table"`); both layouts use the wiki image macro `!filename|thumbnail!` for screenshots. **Figma:** when `issue.expected.figmaLink` is set, emit it as `[breadcrumb](url)` (Markdown link, not a bare URL, not inside backticks) so it renders as a clickable wiki link with `:` URL-encoded.
+- **Translation (when `translate === "en"`):** translate `displayTitle` (= `issue.title || issue.note || issue.id`) and `issue.note` to English BEFORE building summary or description. Cache the translated string and reuse it in both places (summary + `### heading`) so they always match. Computed values, selectors, URLs, IDs are NEVER translated.
+- Build the Jira summary using `summaryFormat` resolved in Step 3c (passed to the skill as `config.summaryFormat`). Pass also `config.bodyFormat` and `config.translate` from Steps 3d / 3e.
 - Map `issue.severity` → Jira priority via `profile.jira.severityToPriority` if present, else use these defaults:
   - `critical` → Highest
   - `major` → High
