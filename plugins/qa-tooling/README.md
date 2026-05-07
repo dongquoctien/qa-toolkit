@@ -18,7 +18,7 @@ QA/QC workflow automation for web projects. Auto-detects your stack, generates a
 |---|---|
 | `/qa:init` | Auto-detect framework/locales/sections/Figma/git, generate `docs/qa/qa-profile.json` and a README. Asks at most three questions (Jira project, parent ticket, Figma key). |
 | `/qa:doctor` | Health-check: profile validity, source conventions, `.gitignore`, Figma tree freshness, MCP server availability. |
-| `/qa:sync` | Read latest QA report → create one Jira sub-task per issue (or `--mode tasks` / `--mode append`). Idempotent — safe to re-run. |
+| `/qa:sync` | Read latest QA report → push to Jira. Always confirms target via `AskUserQuestion`: pick mode (`subtasks` / `tasks` / `append-comment` / `append-description`) and parent ticket. Idempotent — safe to re-run. |
 | `/qa:figma-sync` | Crawl the Figma file via MCP and write `docs/qa/qa-figma-tree.json` so the extension can auto-fill nearest-frame deeplinks for picked elements. Run once, re-run when designer reorganizes the file. |
 
 ## Skills

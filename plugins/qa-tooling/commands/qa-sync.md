@@ -1,23 +1,29 @@
 ---
 name: qa:sync
 description: Read a QA report (JSON or ZIP) and create/update Jira issues via the Atlassian MCP server.
-argument-hint: "[report-path] [--mode subtasks|tasks|append] [--parent KEY-NN] [--dry-run]"
+argument-hint: "[report-path] [--mode subtasks|tasks|append-comment|append-description] [--parent KEY-NN] [--dry-run]"
 ---
 
 # /qa:sync — QA Report → Jira
 
-Convert a QA Annotator report into Jira issues. Default behaviour: create one **sub-task per issue** under the profile's `defaultParent`.
+Convert a QA Annotator report into Jira issues. The command **never auto-decides** between creating subtasks and editing an existing ticket — it always confirms via `AskUserQuestion` when the choice is ambiguous.
+
+> **Interaction convention:** ALWAYS use the `AskUserQuestion` tool to gather user input. Never write inline `? ...` prompts and wait for a free-text reply. This command emits up to three structured prompts: **(1) mode** when `--mode` is missing, **(2) parent** when no parent is resolved, **(3) parent confirmation** before any Jira write. Skip a prompt only when its value is already known from flags / report hints / profile defaults.
 
 ## Inputs
 
 Positional argument (optional): path to a `qa-report.json` or `.zip`. If omitted, find the most recent report under `docs/qa/reports/<date>/qa-report.json` (sort folders by name, descending — they're date-stamped).
 
 Flags:
-- `--mode subtasks` *(default)* — each issue becomes a Jira **Sub-task** under `--parent`.
+- `--mode subtasks` — each issue becomes a Jira **Sub-task** under `--parent`.
 - `--mode tasks` — each issue becomes a top-level Jira Task (no parent required).
-- `--mode append` — append all issues as a single comment on `--parent` (no new tickets).
+- `--mode append-comment` — append all issues as a single ADF **comment** on `--parent` (no new tickets, parent description untouched).
+- `--mode append-description` — append the QA report block to the **description** of `--parent` via `jira_update_issue` (mutates the parent ticket itself; original description is preserved above the appended block).
+- `--mode append` — alias for `--mode append-comment` (kept for back-compat).
 - `--parent KEY-NN` — override `report.syncHints.suggestedParent` and `profile.jira.defaultParent`.
-- `--dry-run` — print what would be created, do not call MCP create.
+- `--dry-run` — print what would be created/updated, do not call MCP write.
+
+**No `--mode` flag → ALWAYS prompt.** There is no implicit default. See Step 3.
 
 ## Required MCP
 
@@ -39,16 +45,58 @@ Read `docs/qa/qa-profile.json`. The report's `profile.id` should match `profile.
 
 ### 3. Resolve sync config
 
-Precedence (highest first):
+Precedence for `mode` and `parent` (highest first):
 1. CLI flags (`--mode`, `--parent`)
-2. `report.syncHints` (`suggestedJiraProject`, `suggestedParent`, `defaultMode`)
-3. `profile.jira` (`projectKey`, `defaultParent`, `defaultMode`)
+2. `report.syncHints` (`suggestedJiraProject`, `suggestedParent`)
+3. `profile.jira` (`projectKey`, `defaultParent`)
 
-If, after merging, `mode === "subtasks"` or `"append"` and there is no parent key → call `AskUserQuestion` with `header: "Parent"` and a single question whose options include the most likely candidates (e.g. tickets referenced in recent commits or branch name) plus an implicit "Other" for free entry. Never use an inline `? ...` prompt.
+Note: `report.syncHints.defaultMode` and `profile.jira.defaultMode` are treated as **suggestions only**, never as silent defaults — see 3a.
 
-### 4. Verify parent (skip if mode is `tasks`)
+**3a. Prompt for mode (REQUIRED when `--mode` is absent).** Always call `AskUserQuestion`:
 
-Call `mcp-atlassian.jira_get_issue` with the resolved parent key. If it 404s → abort with `fix: parent <KEY> not found in Jira`. Print the parent's summary so the user can confirm visually.
+```
+header: "Sync mode"
+question: "How should the {N} QA issue(s) be pushed to Jira?"
+options:
+  - "Create sub-tasks under a parent ticket (Recommended)"  // → subtasks
+  - "Append as a comment on a parent ticket"                // → append-comment
+  - "Append into the description of a parent ticket"        // → append-description
+  - "Create top-level tasks (no parent)"                    // → tasks
+```
+
+If `report.syncHints.defaultMode` or `profile.jira.defaultMode` is set, list that option **first** and add `(Recommended)` to its label — but still ask. Never skip this prompt just because a default exists. The only way to bypass is the explicit `--mode` flag.
+
+**3b. Resolve parent (skip if final mode is `tasks`).** If `parent` is still unresolved after flag/hint/profile precedence, call `AskUserQuestion`:
+
+```
+header: "Parent"
+question: "Which Jira ticket should be the parent for this QA session?"
+options:
+  - <top guess from report.syncHints.suggestedParent>      // if present
+  - <top guess from branch name regex (e.g. ELS-1234-foo → ELS-1234)>
+  - <top guess from recent commit subjects>
+  // implicit "Other" for free entry
+```
+
+Never use an inline `? ...` prompt.
+
+### 4. Verify and confirm parent (skip if mode is `tasks`)
+
+**4a. Verify exists.** Call `mcp-atlassian.jira_get_issue` with the resolved parent key. If it 404s → abort with `fix: parent <KEY> not found in Jira`.
+
+**4b. Confirm with the user (REQUIRED — do NOT skip even when parent came from a flag).** Print the parent's summary, status, and assignee, then call `AskUserQuestion`:
+
+```
+header: "Confirm parent"
+question: "Parent ticket: {KEY} — \"{summary}\" (status: {status}, assignee: {assignee or 'unassigned'}). Proceed in mode '{mode}'?"
+options:
+  - "Yes, proceed (Recommended)"
+  - "Pick a different parent"   // → restart Step 3b prompt
+  - "Change mode"               // → restart Step 3a prompt
+  - "Cancel"                    // → abort with no Jira writes
+```
+
+Only after the user picks "Yes, proceed" may the command call any `jira_create_issue` / `jira_add_comment` / `jira_update_issue`. This guard applies even with `--dry-run` so the dry-run summary reflects the user's confirmed choice.
 
 ### 5. Iterate issues
 
@@ -65,9 +113,10 @@ For each `issue` in `report.issues`:
 - Mode-specific:
   - `subtasks` → `mcp-atlassian.jira_create_issue` with `issuetype: "Sub-task"`, `parent: <key>`.
   - `tasks` → same call without parent, `issuetype: "Task"`.
-  - `append` → batch all issues into one ADF comment, single `mcp-atlassian.jira_add_comment` call on parent. Skip the per-issue loop.
+  - `append-comment` (alias `append`) → batch all issues into one ADF comment, single `mcp-atlassian.jira_add_comment` call on parent. Skip the per-issue create loop.
+  - `append-description` → fetch parent's current description with `jira_get_issue`, then call `jira_update_issue` with the original description **preserved on top** + a separator + the QA report block appended below. The separator is a level-2 ADF heading: `QA session — <profile.name> · <report.scope.date>`. If parent has no description, write the QA block as the new description.
 
-If `--dry-run`, print the planned action for each issue and stop.
+If `--dry-run`, print the planned action for each issue (and the planned description diff for `append-description`) and stop.
 
 ### 6. Update report with sync results
 
