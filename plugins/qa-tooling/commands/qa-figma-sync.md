@@ -15,7 +15,7 @@ The crawl is one-time per Figma-file change. Re-run when the designer reorganize
 Flags (all optional):
 - `--force` — overwrite the existing tree without asking.
 - `--viewports <csv>` — restrict the crawl to specific viewport variants (e.g. `desktop,mobile`). Default: every variant declared in `profile.pages`.
-- `--pages <csv>` — restrict the crawl to specific page names (e.g. `home,about-us`). Default: every entry in `profile.pages`.
+- `--pages <csv>` — restrict the crawl to specific page names (e.g. `home,<page-name>`). Default: every entry in `profile.pages`.
 - `--max-depth <N>` — depth cap (default 8). Lower = smaller file + faster crawl.
 
 **Default behaviour (no flags):** crawl every entry in `profile.pages` × every declared viewport variant. The output tree omits `partial` and `partialNote` fields entirely. If a previous run had left these fields behind (because it was narrowed via `--pages` or `--viewports`), the new full crawl **overwrites** them — the resulting file must NOT carry stale `partial: true`.
@@ -68,17 +68,16 @@ After the skill returns:
 
 ```
 Reading: docs/qa/qa-profile.json
-Figma file: bdRmMjKyxMegvVhGtH2Zwv (OMH-Co-Website)
+Figma file: <fileKey> (<fileSlug>)
 
 Crawling…
-  home / desktop      → 412 nodes (rootNodeId 3880:2879)
-  home / tablet       → 398 nodes
-  home / mobile       → 376 nodes
-  about-us / desktop  → 287 nodes
+  <page-name> / desktop  → <N> nodes (rootNodeId <nodeId>)
+  <page-name> / tablet   → <N> nodes
+  <page-name> / mobile   → <N> nodes
   …
 
-✓ Wrote docs/qa/qa-figma-tree.json (1.2 MB · 2,847 nodes · 7 pages × 4 viewports)
-✓ Crawled at 2026-05-07T03:14:00Z
+✓ Wrote docs/qa/qa-figma-tree.json (<size> · <N> nodes · <P> pages × <V> viewports)
+✓ Crawled at <ISO timestamp>
 ℹ Re-run /qa:figma-sync after the designer reorganizes the file.
 
 Next steps:
@@ -87,7 +86,7 @@ Next steps:
      the same folder as the profile JSON).
   2. Pick any element on the live site. The modal's "Figma link" field will
      be prefilled with the nearest matching frame, and a breadcrumb tooltip
-     shows the ancestor chain (e.g. "home > Section3 > Frame 45").
+     shows the ancestor chain (e.g. "<page-name> > <SectionLayerName> > Frame 45").
 ```
 
 ## Failure modes

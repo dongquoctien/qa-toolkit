@@ -38,26 +38,26 @@ Return a single JSON object:
     // true  = every locale gets its own prefix, including the default
   },
   "sections": [{ "name": "HeroSection", "file": "src/components/Hero.astro", "line": 12 }],
-  "routes": [{ "name": "about-us", "path": "/about-us", "file": "src/pages/about-us.astro" }],
+  "routes": [{ "name": "<page-name>", "path": "/<page-path>", "file": "src/pages/<page-path>.astro" }],
   "i18nFiles": ["src/i18n/en.json", "src/i18n/ko.json"],
   "figmaFileKey": "<key or null>",
   "figmaFileSlug": "<slug or null>",
   "figmaPages": [
     // Per-page nodeIds with viewport variants. Empty array if no source provides them.
     {
-      "pageName": "home",
-      "nodeId": "3880:2879",                   // primary (usually desktop)
-      "viewportVariants": { "desktop": "3880:2879", "tablet": "...", "mobile": "..." }
+      "pageName": "<page-name>",
+      "nodeId": "1234:5678",                   // primary (usually desktop)
+      "viewportVariants": { "desktop": "1234:5678", "tablet": "...", "mobile": "..." }
     }
   ],
   "figmaSections": [
     // Per-section nodeIds. `pageName` ties back to figmaPages; `sectionName`
     // matches the data-section attribute value found in the source.
     {
-      "pageName": "home",
-      "sectionName": "HeroSection",
-      "nodeId": "3880:2925",
-      "viewportVariants": { "desktop": "3880:2925", "tablet": "...", "mobile": "..." },
+      "pageName": "<page-name>",
+      "sectionName": "<SectionName>",
+      "nodeId": "1234:5678",
+      "viewportVariants": { "desktop": "1234:5678", "tablet": "...", "mobile": "..." },
       "source": "component-map" | "data-attr" | "comment"
     }
   ],
@@ -67,7 +67,7 @@ Return a single JSON object:
     "reporterEmail": "<git config user.email>",
     "githubRawBase": "https://github.com/<org>/<repo>/raw/<branch>/docs/qa/reports/{date}/screenshots/"
   },
-  "jiraProjectKeyGuess": "ELS"
+  "jiraProjectKeyGuess": "<KEY>"
 }
 ```
 
@@ -145,9 +145,9 @@ Enumerate top-level pages so the extension can map URL → page name.
 
 - **Astro:** Glob `src/pages/**/*.{astro,md,mdx}`. Skip `src/pages/api/**`. For each:
   - `src/pages/index.astro` → `{ name: "home", path: "/", file: "..." }`
-  - `src/pages/about-us.astro` → `{ name: "about-us", path: "/about-us", file: "..." }`
-  - `src/pages/about-us/index.astro` → same as above
-  - `src/pages/[locale]/about-us.astro` or `src/pages/[lang]/about-us.astro` → strip the `[locale]` segment
+  - `src/pages/<page-path>.astro` → `{ name: "<page-name>", path: "/<page-path>", file: "..." }`
+  - `src/pages/<page-path>/index.astro` → same as above
+  - `src/pages/[locale]/<page-path>.astro` or `src/pages/[lang]/<page-path>.astro` → strip the `[locale]` segment
   - Bracketed dynamic segments (`[slug]`) → keep the path with `:slug` placeholder, mark as `dynamic: true`
 - **Next.js (Pages Router):** Glob `pages/**/*.{js,jsx,ts,tsx}`, skip `pages/api/**` and `pages/_*.{...}`. Same naming rules.
 - **Next.js (App Router):** Glob `app/**/page.{js,jsx,ts,tsx}`. The route path is the directory chain minus group segments `(name)`.
@@ -178,10 +178,10 @@ If the file exists at `<workspaceRoot>/docs/design-system/component-map.json`, r
   "figmaFileKey": "...",
   "pages": {
     "<pageName>": {
-      "figmaPageNodeId": "3880:2879",
+      "figmaPageNodeId": "1234:5678",
       "viewportVariants": { "desktop": "...", "tablet": "...", "mobile": "..." },
       "sections": [
-        { "sectionName": "Hero", "sectionType": "HeroSection", "sectionNodeId": "3880:2925",
+        { "sectionName": "Hero", "sectionType": "HeroSection", "sectionNodeId": "1234:5678",
           "mobileNodeId": null, "tabletNodeId": null }
       ]
     }

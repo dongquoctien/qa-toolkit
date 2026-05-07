@@ -37,7 +37,7 @@ The profile and all output paths are written **inside `workspaceRoot`**, not `pr
 
 After detection, the only values that may still be missing are:
 
-- **Jira project key** — first try to auto-infer from the current branch (`ELS-1234-foo` → `ELS`) or from recent commit messages.
+- **Jira project key** — first try to auto-infer from the current branch (`<KEY>-<NNNN>-foo` → `<KEY>`) or from recent commit messages.
 - **Default Jira parent ticket** — never auto-detected.
 - **Figma file key** — only missing if neither `.claude/homepage-plugin.json#figmaFileKey` nor `figma.config.json` provided one.
 
