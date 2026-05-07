@@ -2,10 +2,10 @@
   "$schema": "claude-plugin-v1",
   "name": "qa-tooling",
   "displayName": "QA Tooling",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "QA/QC workflow automation for web projects: auto-detect stack, generate qa-profile.json for the QA Annotator extension, and sync QA reports into Jira via MCP.",
   "author": {
-    "name": "OMH Co"
+    "name": "qa-tooling contributors"
   },
   "license": "MIT",
   "keywords": ["qa", "qc", "jira", "figma", "astro", "annotator"],

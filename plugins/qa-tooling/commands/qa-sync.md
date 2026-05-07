@@ -85,7 +85,7 @@ header: "Parent"
 question: "Which Jira ticket should be the parent for this QA session?"
 options:
   - <top guess from report.syncHints.suggestedParent>      // if present
-  - <top guess from branch name regex (e.g. ELS-1234-foo → ELS-1234)>
+  - <top guess from branch name regex (e.g. `<KEY>-<NNNN>-foo` → `<KEY>-<NNNN>`)>
   - <top guess from recent commit subjects>
   // implicit "Other" for free entry
 ```
@@ -182,24 +182,24 @@ After each successful Jira create, mutate the in-memory report so `issue.synced 
 ### 7. Print summary
 
 ```
-Reading: docs/qa/reports/2026-05-06/qa-report.json
-Profile: home-omh
+Reading: docs/qa/reports/<date>/qa-report.json
+Profile: <profile-id>
 Mode:    subtasks
-Parent:  ELS-1234 — "Implement Home Page V2-EN"
+Parent:  <KEY>-<NNNN> — "<parent summary>"
 
 Creating Jira sub-tasks...
-[ 1/15] ISS-001 H2 size mismatch          → ELS-2001  (2 screenshots attached)
-[ 2/15] ISS-002 Card shadow too light     → ELS-2002  (1 screenshot attached)
+[ 1/15] ISS-001 H2 size mismatch          → <KEY>-NNNN  (2 screenshots attached)
+[ 2/15] ISS-002 Card shadow too light     → <KEY>-NNNN  (1 screenshot attached)
 ...
-[15/15] ISS-015 ...                       → ELS-2015  (attach failed — see below)
+[15/15] ISS-015 ...                       → <KEY>-NNNN  (attach failed — see below)
 
 ✓ 15 created · 0 skipped · 0 failed
 ✓ 14 with screenshots attached · 1 attach failed · 0 missing on disk
-✓ Updated docs/qa/reports/2026-05-06/qa-report.json with synced fields
-✓ View: https://<workspace>.atlassian.net/browse/ELS-1234
+✓ Updated docs/qa/reports/<date>/qa-report.json with synced fields
+✓ View: https://<workspace>.atlassian.net/browse/<KEY>-<NNNN>
 
 Attach failures (re-upload manually):
-  ELS-2015 ← ISS-015-auto-99412.png
+  <KEY>-NNNN ← ISS-NNN-auto-<hash>.png
 ```
 
 For failures, print the issue id, the Jira error message, and continue with the next issue. At the end, list creation failures and attach failures separately. Attach failures are always recoverable — the issue exists and the description names every PNG so the user knows what to drag in.

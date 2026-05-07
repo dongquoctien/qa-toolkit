@@ -74,7 +74,7 @@ The MCP returns the node and its descendants. Walk the result depth-first:
   - Collect each descendant's `text` value when present.
   - Join with `" | "`, truncate to **200 chars**.
   - This makes a Frame node self-describing in the matcher's breadcrumb without the consumer having to walk descendants again.
-  - Example: `Frame 1000003831 → "Built for Asia's Hotels, Designed for the World | The Supply Architecture for Global Hotels | 70,000+ | Direct Contracts | 800,000+ | Global Inventory"`.
+  - Example: `Frame 1000003831 → "<heading text> | <subheading text> | <stat label> | <stat value> | …"`.
   - Skip when no descendant has text (results in `summary` being absent — matcher must tolerate undefined).
 - For each top-level child of the page root (depth 1) whose `bbox.h >= 200` (heuristic: real sections are tall), record its id under `pages[].viewports[].sections`.
 
@@ -105,9 +105,9 @@ For each entry in `profile.sections`:
 1. **Read the file** at `<workspaceRoot>/<section.file>`. If missing, skip with a warning.
 2. **Extract `// figma:` annotations** anywhere in the file. Two accepted forms:
    ```
-   // figma: 3880:2963
-   {/* figma: 3880-2963 */}
-   <!-- figma: 3880:2963 -->
+   // figma: 1234:5678
+   {/* figma: 1234-5678 */}
+   <!-- figma: 1234:5678 -->
    ```
    Regex (case-insensitive): `figma:\s*([0-9]+[:-][0-9]+)`. Normalize hyphen → colon. Take the FIRST occurrence — that's the section root. If there are more, store them under `figmaInnerNodeIds[]` for use by deep-frame matching.
 3. **Extract static text strings** from the file. Targets:
@@ -115,8 +115,8 @@ For each entry in `profile.sections`:
    - Top-of-file `const COPY = { ... }` blocks (best-effort — collect all string-literal values).
    - Astro frontmatter `const heading = "...";` declarations.
    Skip any text shorter than 3 chars or longer than 200 chars. Cap per-section at 30 strings.
-4. **Detect Figma URL imports** like `// figma-url: https://www.figma.com/design/.../n?node-id=3880-2963` and treat them the same as `// figma:` annotations.
-5. **Detect data-figma-node-id attribute** in templates: `data-figma-node-id="3880-2963"` on top-level section element. Same priority as `// figma:` comment.
+4. **Detect Figma URL imports** like `// figma-url: https://www.figma.com/design/.../n?node-id=1234-5678` and treat them the same as `// figma:` annotations.
+5. **Detect data-figma-node-id attribute** in templates: `data-figma-node-id="1234-5678"` on top-level section element. Same priority as `// figma:` comment.
 6. **Cross-reference texts against Figma to auto-resolve `figmaNodeId`** (when steps 2/4/5 didn't find one):
    - Take all the strings collected in step 3.
    - For each top-level section node listed in `pages[].viewports[].sections`, count how many of those strings match (case-insensitive substring) any TEXT descendant of that section.
@@ -128,14 +128,14 @@ Output shape:
 
 ```jsonc
 "sectionIndex": {
-  "WhyOhmyhotelCoSection": {
-    "file": "src/components/sections/WhyOhmyhotelCoSection.astro",
-    "figmaNodeId": "3880:2963",            // optional — present when annotation found
-    "figmaInnerNodeIds": ["3880:2966"],    // optional — additional figma: comments inside
+  "<SectionName>": {
+    "file": "src/components/sections/<SectionName>.astro",
+    "figmaNodeId": "1234:5680",            // optional — present when annotation found
+    "figmaInnerNodeIds": ["1234:5690"],    // optional — additional figma: comments inside
     "texts": [
-      "Why Ohmyhotel&Co",
-      "Is hotel distribution in Asia still fragmented?",
-      "There are many channels, and management is complex.",
+      "<heading text>",
+      "<subheading text>",
+      "<paragraph text>",
       "..."
     ],
     "source": "data-attr|comment|both|texts-only"
@@ -162,7 +162,7 @@ Reject the result if:
     1. Set the page root's bbox to `{ x: 0, y: 0, w: rootW, h: rootH }`.
     2. Walk depth-first carrying a parallel stack of cumulative `(x, y)` offsets.
     3. For each descendant, its bbox is `{ x: parentAbs.x + localX, y: parentAbs.y + localY, w, h }`.
-  - **Do NOT subtract the root's absolute file coords from every descendant** — descendants are already parent-relative, so subtracting would over-correct. (This was a bug in an earlier draft of this spec; verified end-to-end with the about-us project on 2026-05-07.)
+  - **Do NOT subtract the root's absolute file coords from every descendant** — descendants are already parent-relative, so subtracting would over-correct. (This was a bug in an earlier draft of this spec; verified end-to-end against an Astro project on 2026-05-07.)
 - **Multiple roots per page**: most projects have only one Figma frame per (page, viewport). If the MCP returns several siblings, write them all and pick the largest as `rootNodeId`.
 - **Rate limiting**: Figma's `get_metadata` can be slow on large files. Crawl one viewport at a time, log progress.
 - **Text deduplication**: skip TEXT nodes with `text === ""` or `text.length > 500` (probably long body copy that bloats the tree).

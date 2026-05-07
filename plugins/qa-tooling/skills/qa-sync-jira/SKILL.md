@@ -60,10 +60,10 @@ Return after running:
 
 ```jsonc
 {
-  "created": [{ "issueId": "ISS-001", "jiraKey": "ELS-2001", "url": "...", "attached": ["ISS-001-auto-48471.png"] }],
+  "created": [{ "issueId": "ISS-001", "jiraKey": "<KEY>-NNNN", "url": "...", "attached": ["ISS-001-auto-<hash>.png"] }],
   "skipped": [{ "issueId": "ISS-002", "reason": "already-synced" }],
   "failed":  [{ "issueId": "ISS-003", "error": "<message>" }],
-  "attachFailed": [{ "issueId": "ISS-001", "jiraKey": "ELS-2001", "files": ["ISS-001-auto-48471.png"], "error": "<message>" }],
+  "attachFailed": [{ "issueId": "ISS-001", "jiraKey": "<KEY>-NNNN", "files": ["ISS-001-auto-<hash>.png"], "error": "<message>" }],
   "attachWarnings": { "ISS-004": ["ISS-004-fixed-12.png"] },   // files referenced by report but not on disk
   "appendCommentKey": "<key if mode=append-comment, else null>",
   "appendDescriptionKey": "<key if mode=append-description, else null>"
@@ -173,8 +173,8 @@ For each successful create, set on the source issue:
 
 ```jsonc
 "synced": {
-  "jiraKey":  "ELS-2001",
-  "jiraUrl":  "https://<workspace>.atlassian.net/browse/ELS-2001",
+  "jiraKey":  "<KEY>-NNNN",
+  "jiraUrl":  "https://<workspace>.atlassian.net/browse/<KEY>-NNNN",
   "syncedAt": "<ISO now>",
   "mode":    "subtasks"
 }
@@ -187,7 +187,7 @@ This mutation is in-memory. The caller (`/qa:sync`) is responsible for writing t
 The issue description is a **Markdown string** that the MCP server converts to Jira wiki markup. The template below is engineered to survive the adapter without column-shift, escape-bombs, or italic-flips. Three rules drive the design:
 
 1. **Default body is a bold-key list, not a Markdown table.** A literal `|` in a Markdown-table cell shifts columns under most adapters. The metadata block is therefore a **bold-key list** by default. Selectors and computed values that contain `|` go inside fenced code blocks — `|` is harmless there. **Tables are available as opt-in (`config.bodyFormat === "table"`)** and must follow the column rules in "Table format" below.
-2. **Embed images by attachment filename, not URL.** Use the wiki-image macro `!filename.png|thumbnail!`. The attachment must already exist on the ticket (Step 2b); if attachment fails, the same filename appears as plain text so a human can re-attach it.
+2. **Reference screenshots by filename in plain text — do NOT use wiki-image macros.** Verified live on ELS-1317 (2026-05-07): the adapter rewrites `!filename.png|thumbnail!` into Markdown `![](filename.png)`, which Jira UI then renders as **literal text** (no thumbnail, no broken-image placeholder). Both wiki and Markdown image syntax fail on this adapter. Strategy: upload PNGs as attachments via `jira_update_issue` (Step 2b) and emit a plain-text bullet list of filenames in the description. Jira's sidebar **Attachments** panel renders thumbnails automatically — no inline embed needed.
 3. **Translate user prose, not technical values.** When `config.translate === "en"` (default), `displayTitle`, `issue.note`, and any free-text inside `issue.expected` get translated to natural English. Selectors, computed CSS, URLs, file paths, and Figma breadcrumbs are passed through verbatim.
 
 ### Per-issue body (default — `bodyFormat: "list"`)
@@ -202,7 +202,7 @@ The issue description is a **Markdown string** that the MCP server converts to J
 **Viewport:** {viewportLabel}
 **Breakpoint:** {issue.context.breakpoint.label}     ← omit line if missing
 **Device:** {issue.context.device.platform}{isMobile ? " · mobile" : ""}     ← omit line if missing
-**File\:line:** {issue.source.file}:{issue.source.line}     ← omit line if missing
+**File:line:** {issue.source.file}:{issue.source.line}     ← omit line if missing
 
 **Note:** {translate(issue.note)}     ← omit line if note is empty/missing
 
@@ -229,9 +229,16 @@ The issue description is a **Markdown string** that the MCP server converts to J
 _Reported by {report.reporter || "QA Annotator"} · {report.exportedAt}_
 ```
 
-> **Escape rule for `**` keys.** Field labels are wrapped in `**bold**`. When emitting a literal colon right after a key — e.g. `**File:line:**` — escape the inner colon as `**File\:line:**` so adapters don't reinterpret. The values themselves never need escaping in this layout because they're not next to a `|`.
+> **No escape needed for `:` inside bold labels.** Field labels are wrapped in `**bold**` and may contain a literal `:` (e.g. `**File:line:**`). Do **NOT** escape the inner colon as `\:` — verified live on ELS-1317 (2026-05-07): the adapter passes the backslash through to the rendered UI as a visible `\` character, breaking the label. Plain `**File:line:**` renders correctly. Values themselves never need escaping in this layout because they're not next to a `|`.
 
 ### Per-issue body (opt-in — `bodyFormat: "table"`)
+
+> ⚠ **Use sparingly.** Verified live on ELS-1317 (2026-05-07) against the mcp-atlassian adapter on Atlassian Cloud:
+> - **`|` in a cell — even backslash-escaped or backtick-wrapped — fragments the row into extra columns.** No escape strategy works.
+> - **Inline code `` ` `` is stripped inside cells** — file paths and selectors lose their monospace styling.
+> - Empty cells render blank, not as `—`.
+>
+> Result: `bodyFormat: "table"` is safe **only** for short metadata fields whose values are guaranteed `|`-free and don't need monospace presentation (Severity, Type, Page, Locale, Viewport, Breakpoint, Device labels). For real QA data, `bodyFormat: "list"` (the default) is almost always the right choice — `font-family` values, file paths with regex-like selectors, and computed CSS often contain `|` or need monospace.
 
 When the user explicitly opts in (via `--body-format table` or the AskUserQuestion choice), replace the metadata bold-key block with a 2-column Markdown table. Selector / Expected / Actual / Figma / Screenshots stay outside the table (their content contains `|`, fenced blocks, or wiki macros that don't survive table cells).
 
@@ -247,7 +254,7 @@ When the user explicitly opts in (via `--body-format table` or the AskUserQuesti
 | Viewport | {viewportLabel} |
 | Breakpoint | {issue.context.breakpoint.label} |     ← omit row if missing
 | Device | {issue.context.device.platform}{isMobile ? " · mobile" : ""} |     ← omit row if missing
-| File:line | `{issue.source.file}:{issue.source.line}` |     ← wrap in inline code; omit row if missing
+| File:line | {issue.source.file}:{issue.source.line} |     ← plain text; backticks get stripped inside cells (verified live, ELS-1317). Omit row if missing.
 | Note | {translate(issue.note)} |     ← omit row if note is empty
 
 **Selector{selectors.length>1?"s":""}:**
@@ -271,10 +278,11 @@ _Reported by {report.reporter || "QA Annotator"} · {report.exportedAt}_
 
 **Table-cell rules (must follow exactly):**
 
-1. **Never let an unescaped `|` enter a cell.** If a value can contain `|` (e.g. some `device.userAgent` strings), wrap the entire value in inline code `` `value` `` — `|` is inert inside backticks. Values like `Severity` / `Type` / `Locale` / breakpoint labels never contain `|`, so they go bare.
-2. **No fenced blocks, no multi-line content, no wiki macros inside cells.** Table cells must be single-line. Anything multi-line (Selector, Expected, Actual, Screenshots) goes outside the table.
-3. **Omit the row entirely** when the field is missing (don't leave an empty value cell — empty cells render as `—` on some adapters and are noisy).
-4. **Header row is exactly `| Field | Value |`** with `| --- | --- |` separator. Do not invent extra columns.
+1. **NEVER let `|` enter a cell — neither raw, nor backslash-escaped, nor wrapped in backticks.** Verified live on ELS-1317 (2026-05-07): rows with body `` `a \| b \| c` `` and `a \| b \| c` both fragmented into 4 columns. Inline code formatting itself gets stripped from table cells, so backticks neither protect against `|` nor preserve monospace styling. **If a value can ever contain `|` (file paths with regex hints, computed CSS like `font-family: ..., system-ui, sans-serif`, selectors with attribute matchers), MOVE the row out of the table** — render it as a `**Key:** value` line below instead. The `table` opt-in is for short, guaranteed `|`-free metadata only.
+2. **Inline code `` `value` `` is NOT preserved inside cells.** Backticks render as plain text, monospace styling is lost. If you need monospace presentation (file paths, selectors), move the row out of the table.
+3. **No fenced blocks, no multi-line content, no wiki macros inside cells.** Table cells must be single-line. Anything multi-line (Selector, Expected, Actual, Screenshots) goes outside the table.
+4. **Omit the row entirely** when the field is missing (don't leave an empty value cell — empty cells render as a blank cell, which is visually noisy).
+5. **Header row is exactly `| Field | Value |`** with `| --- | --- |` separator. Do not invent extra columns.
 
 ### Helpers
 
@@ -315,20 +323,21 @@ _Reported by {report.reporter || "QA Annotator"} · {report.exportedAt}_
 
 All fences are triple-backtick with no language tag. Inside the fence, `|`, `*`, `_`, `!` are inert — no escaping needed.
 
-**`renderScreenshots(shots)`** — returns a Markdown string. Per shot:
+**`renderScreenshots(shots)`** — returns a Markdown string. Per shot, emit ONE plain-text bullet:
 
 ```md
-- !{shot.filename}|thumbnail!     ← the wiki image macro; renders if attachment exists
-  `{shot.filename}` — `{relativePath}`     ← always emitted as plain-text fallback
+- `{shot.filename}` — `{relativePath}`
 ```
 
-The wiki macro `!file|thumbnail!` is one of the few wiki-only fragments that the Markdown adapter passes through verbatim (it has no Markdown counterpart). The plain-text line on the next bullet is **always emitted** regardless of attach success — it tells a human reviewer exactly which file to look for if the thumbnail fails to render. `relativePath` = `screenshots/{shot.filename}` so the user can locate it under `docs/qa/reports/<date>/`.
+`relativePath` = `screenshots/{shot.filename}` so reviewers can locate the source file under `docs/qa/reports/<date>/`.
+
+**Why no inline embed?** Verified live on ELS-1317 (2026-05-07): both `!filename|thumbnail!` (wiki macro) and `![](filename)` (Markdown image) get adapter-mangled and render as literal text in the Jira UI. The reliable channel is the **Attachments panel in the sidebar** — Jira renders thumbnails there automatically once `jira_update_issue` (Step 2b) uploads the PNGs. The plain-text bullet in the description tells the reviewer which file in the panel corresponds to which finding.
 
 If `shots` is empty, omit the **Screenshots** section entirely.
 
 **Figma link rules (must follow when emitting the `**Figma:**` line):**
 
-1. **Source of truth**: prefer `issue.expected.figmaLink` if present (the extension already URL-encoded it). Else build from `profile.figma.linkTemplate` substituting `{fileKey}`, `{fileSlug}`, `{nodeId}` — and **URL-encode `nodeId`** by replacing `:` with `%3A` (e.g. `3880:2925` → `3880%3A2925`). A raw `:` in the URL silently breaks deeplink resolution on some Figma builds.
+1. **Source of truth**: prefer `issue.expected.figmaLink` if present (the extension already URL-encoded it). Else build from `profile.figma.linkTemplate` substituting `{fileKey}`, `{fileSlug}`, `{nodeId}` — and **URL-encode `nodeId`** by replacing `:` with `%3A` (e.g. `1234:5678` → `1234%3A5678`). A raw `:` in the URL silently breaks deeplink resolution on some Figma builds.
 2. **Anchor text** (`figmaAnchor`): pick in this order — `issue.expected.figmaBreadcrumb` (most informative) → `issue.expected.figmaNodeName` → `"Open in Figma"`. Never leave the link bare.
 3. **Always Markdown-link form** `[anchor](url)` so the adapter outputs a clickable wiki link `[anchor|url]`. Do NOT emit the URL alone, do NOT wrap inside backticks (would render as code, not a link).
 4. **Skip the line entirely** only when neither `issue.expected.figmaLink` nor (`profile.figma.fileKey` + `issue.expected.figmaNodeId`) is available. Do not emit a placeholder like `[no figma]`.
@@ -351,17 +360,17 @@ Per-issue sections that follow use the same per-issue template above, downshifte
 
 This gives the parent ticket an at-a-glance view of which screen sizes the session covered.
 
-## Anti-patterns (do NOT do these — they caused inconsistent ELS-1317 subtasks)
+## Anti-patterns (do NOT do these — they caused inconsistent subtasks observed across machines)
 
 The following were observed across machines and must be rejected:
 
 1. **Narrative re-composition** — emitting custom sections like `## QA Annotator finding — ISS-NNN`, `### Observed (actual)`, `### Delta`, `**Original title:**`. These are creative rewrites, not the template. Stick to the per-issue template above.
-2. **Markdown table when `bodyFormat === "list"`** — only opt in to a table when `config.bodyFormat === "table"`. In `"table"` mode, follow the column rules in the "Table format" section: never let an unescaped `|` into a cell, no fenced blocks/wiki macros inside cells, no extra columns.
+2. **Markdown table when `bodyFormat === "list"`** — only opt in to a table when `config.bodyFormat === "table"`. Even in `"table"` mode, **never put a value containing `|` into a cell** (regardless of escapes or backticks — both fail on this adapter). File paths, selectors with attribute matchers, computed CSS like `font-family: ..., system-ui, sans-serif` all need to render as bold-key lines below the table, NOT as extra rows. Inline code wrapping is also stripped from cells; if monospace presentation matters, the row belongs outside the table.
 3. **Translated field labels** — labels are always English (`Severity`, `Type`, `Page`, …). When `config.translate === "en"`, prose VALUES (title, note, expected free-text) are translated; LABELS never are. When `config.translate === "off"`, nothing is translated.
 4. **Translated technical values** — selectors, computed CSS (px/rgb/hex), URLs, file paths, Figma breadcrumbs, IDs (`ISS-001`) must pass through verbatim under either translate setting.
 5. **Bare Figma URL or "Open in Figma" without breadcrumb** — when `figmaBreadcrumb` is available, use it. `Open in Figma` is the last-resort anchor only.
-6. **Unencoded `:` in nodeId** — `node-id=3880:2925` instead of `3880%3A2925`. Always encode.
-7. **Wiki image macro re-escaped to Markdown** — emitting `![](file.png)` (Markdown image syntax) gets adapter-mangled to `\![](file.png)`. Use the wiki macro `!filename|thumbnail!` exactly as written in `renderScreenshots`.
+6. **Unencoded `:` in nodeId** — `node-id=1234:5678` instead of `1234%3A5678`. Always encode.
+7. **Inline image embeds — both wiki and Markdown forms render as literal text on this adapter.** Verified live on ELS-1317 (2026-05-07): `!filename|thumbnail!` (wiki) gets rewritten to `![](filename)` (Markdown), which Jira UI then renders as plain text — no thumbnail, no broken-image placeholder. Do NOT emit either form. Use the plain-text bullet from `renderScreenshots` and rely on the **Attachments panel** in the Jira sidebar (which auto-renders thumbnails for files uploaded via Step 2b's `jira_update_issue`).
 8. **Re-translating per call site** — translate `title` and `note` ONCE at the top of issue processing and reuse the cached value in both summary and heading. Translating twice can produce different strings on different invocations of the same MCP tool.
 9. **Merging `expectedPerElement` into the shared `Expected` block** — the override array is rendered as separate `**Expected — (N) overrides**` sub-blocks, not folded into the shared block. Two distinct surfaces preserve QA intent (which fields were chosen as overrides vs. inherited from All). Conversely, do not omit the shared block when overrides exist; both render together.
 
@@ -378,5 +387,4 @@ The skill is fully idempotent: re-running with the same inputs after success yie
 - **`profile.jira.projectKey` missing** in `tasks` mode → return `{ error: "no-project-key" }`.
 - **MCP rate limiting** → if a single create fails with a 429-like error, sleep ~2s and retry once. After two failures, mark as `failed` and continue.
 - **Screenshot file missing on disk** (report references `shot.filename` but PNG was never exported) → omit from `attachments` JSON; still emit the plain-text fallback line in description so the user knows what to look for; record in `attachWarnings`.
-- **Attach call fails after issue create** → leave the ticket in place; record in `attachFailed` so the summary tells the user which tickets need a manual upload.
-- **Wiki image macro renders as text on some Jira instances** (older DC, custom themes that disable inline images) → harmless. The plain-text filename line below the macro tells the human reviewer what file to open from the local repo.
+- **Attach call fails after issue create** → leave the ticket in place; record in `attachFailed` so the summary tells the user which tickets need a manual upload. The description's plain-text bullet from `renderScreenshots` already names every PNG so a human can drag-and-drop the file into the ticket via Jira's sidebar.

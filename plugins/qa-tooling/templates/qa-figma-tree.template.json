@@ -15,7 +15,7 @@
     "  pages           list of pages crawled, each with viewport variants.",
     "  pages[].viewports[].rootNodeId  the top-of-page Figma node for that viewport.",
     "  pages[].viewports[].sections    direct children that look like page sections.",
-    "  nodes           flat lookup. Key = nodeId (\"3880:2925\" — colon form).",
+    "  nodes           flat lookup. Key = nodeId (\"1234:5678\" — colon form, matches Figma API).",
     "  nodes[id].name  Figma layer name (e.g. \"Frame 45\", \"Hero\").",
     "  nodes[id].type  FRAME | SECTION | COMPONENT | INSTANCE | GROUP | TEXT.",
     "  nodes[id].parentId  immediate parent in the tree, or null for page roots.",
@@ -24,7 +24,7 @@
     "  nodes[id].viewport  which viewport this node belongs to (desktop|tablet|mobile|...)",
     "  nodes[id].text      string, only for TEXT nodes (truncated to 240 chars).",
     "  nodes[id].summary   FRAME/INSTANCE/GROUP only — concat of descendant TEXT (200 chars).",
-    "                      Lets the matcher show 'Frame 45 (• Built for Asia's Hotels...)' instead of",
+    "                      Lets the matcher show 'Frame 45 (• <heading text>…)' instead of",
     "                      a meaningless 'Frame 45'. Compressed in storage as key `s`.",
     "  nodes[id].pageName  back-reference for fast page lookup.",
     "  nodes[id].breadcrumb  human-readable ancestor chain for tooltips.",
@@ -39,64 +39,63 @@
 
   "pages": [
     {
-      "name": "home",
+      "name": "<page-name>",
       "viewports": [
         {
           "viewport": "desktop",
           "viewportWidth": 1920,
-          "rootNodeId": "3880:2879",
-          "sections": ["3880:2925", "3880:2963", "3880:3733"]
+          "rootNodeId": "1234:5678",
+          "sections": ["1234:5679", "1234:5680", "1234:5681"]
         }
       ]
     }
   ],
 
   "nodes": {
-    "3880:2879": {
-      "id": "3880:2879",
-      "name": "1920_home",
+    "1234:5678": {
+      "id": "1234:5678",
+      "name": "1920_<page-name>",
       "type": "FRAME",
       "parentId": null,
       "depth": 0,
       "bbox": { "x": 0, "y": 0, "w": 1920, "h": 8420 },
       "viewport": "desktop",
-      "pageName": "home",
-      "breadcrumb": "1920_home"
+      "pageName": "<page-name>",
+      "breadcrumb": "1920_<page-name>"
     },
-    "3880:2963": {
-      "id": "3880:2963",
-      "name": "Section3",
+    "1234:5680": {
+      "id": "1234:5680",
+      "name": "<SectionLayerName>",
       "type": "FRAME",
-      "parentId": "3880:2879",
+      "parentId": "1234:5678",
       "depth": 1,
       "bbox": { "x": 0, "y": 1200, "w": 1920, "h": 1100 },
       "viewport": "desktop",
-      "pageName": "home",
-      "breadcrumb": "1920_home > Section3"
+      "pageName": "<page-name>",
+      "breadcrumb": "1920_<page-name> > <SectionLayerName>"
     },
-    "3880:2966": {
-      "id": "3880:2966",
+    "1234:5690": {
+      "id": "1234:5690",
       "name": "Frame 45",
       "type": "FRAME",
-      "parentId": "3880:2965",
+      "parentId": "1234:5689",
       "depth": 4,
       "bbox": { "x": 390, "y": 1500, "w": 1140, "h": 80 },
       "viewport": "desktop",
-      "pageName": "home",
-      "breadcrumb": "1920_home > Section3 > Frame 1000003792 > Frame 1000003790 > Frame 45"
+      "pageName": "<page-name>",
+      "breadcrumb": "1920_<page-name> > <SectionLayerName> > Frame 1000003792 > Frame 1000003790 > Frame 45"
     }
   },
 
   "sectionIndex": {
-    "WhyOhmyhotelCoSection": {
-      "file": "src/components/sections/WhyOhmyhotelCoSection.astro",
-      "figmaNodeId": "3880:2963",
-      "figmaInnerNodeIds": ["3880:2966"],
+    "<SectionName>": {
+      "file": "src/components/sections/<SectionName>.astro",
+      "figmaNodeId": "1234:5680",
+      "figmaInnerNodeIds": ["1234:5690"],
       "texts": [
-        "Why Ohmyhotel&Co",
-        "Is hotel distribution in Asia still fragmented?",
-        "There are many channels, and management is complex.",
-        "It's hard to reach global buyers."
+        "<heading text>",
+        "<subheading text>",
+        "<paragraph text>"
       ],
       "source": "comment"
     }

@@ -13,8 +13,8 @@ Build a profile that conforms to `qa-profile-v1` so the QA Annotator extension c
 {
   "stack":   <output of qa-detect-stack>,
   "answers": {
-    "jiraProjectKey": "ELS" | null,
-    "jiraDefaultParent": "ELS-1234" | null,
+    "jiraProjectKey": "<KEY>" | null,
+    "jiraDefaultParent": "<KEY>-<NNNN>" | null,
     "figmaFileKey": "<key>" | null,
     "profileNameOverride": "<custom name>" | null
   },
@@ -49,42 +49,41 @@ Build a profile that conforms to `qa-profile-v1` so the QA Annotator extension c
 
   "localeStrategy": {
     "type": "url-prefix",
-    "supportedLocales": ["en","ko","vi","ja","zh"],
-    "defaultLocale": "en",
+    "supportedLocales": ["<loc1>", "<loc2>", "..."],
+    "defaultLocale": "<loc1>",
     "prefixDefaultLocale": false
   },
 
   "sections": [
     {
-      "name": "HeroSection",
-      "file": "src/components/Hero.astro",
+      "name": "<SectionName>",
+      "file": "src/components/<SectionName>.astro",
       // figma block is optional — present when stack mining or user prompts produced a nodeId
       "figma": {
-        "nodeId": "3880:2925",
-        "viewportVariants": { "desktop": "3880:2925", "tablet": null, "mobile": null }
+        "nodeId": "1234:5678",
+        "viewportVariants": { "desktop": "1234:5678", "tablet": null, "mobile": null }
       }
     }
   ],
 
   "pages": [
     {
-      "name": "home",
+      "name": "<page-name>",
       "figma": {
-        "nodeId": "3880:2879",
-        "viewportVariants": { "desktop": "3880:2879", "tablet": "3880:17016", "mobile": "3880:27786" }
+        "nodeId": "1234:5678",
+        "viewportVariants": { "desktop": "1234:5678", "tablet": "1234:5679", "mobile": "1234:5680" }
       }
     }
   ],
 
   "pageDetection": [
-    { "pattern": "^/(en|ko|vi|ja|zh)?/?$",            "pageName": "home" },
-    { "pattern": "^/(en|ko|vi|ja|zh)?/about-us/?$",   "pageName": "about-us" },
-    { "pattern": "^/(en|ko|vi|ja|zh)?/technology/?$", "pageName": "technology" }
+    { "pattern": "^/(<loc1>|<loc2>|...)?/?$",            "pageName": "<home-page-name>" },
+    { "pattern": "^/(<loc1>|<loc2>|...)?/<page-path>/?$", "pageName": "<page-name>" }
   ],
 
   "jira": {
-    "projectKey": "ELS",
-    "defaultParent": "ELS-1234",
+    "projectKey": "<KEY>",
+    "defaultParent": "<KEY>-<NNNN>",
     "defaultMode": "subtasks",
     "defaultLabels": ["qa", "visual-fidelity", "qa-annotator"],
     "severityToPriority": {
@@ -118,7 +117,7 @@ Build a profile that conforms to `qa-profile-v1` so the QA Annotator extension c
 ### `id`
 
 `<slug>-<dateYYYYMMDD>` where slug is derived from:
-- `stack.git.remote` → take the last segment, lowercase, replace non-alnum with `-`. e.g. `github.com/ohmyhotelco/home` → `home-omh` is OK, but a safer default is just `home`.
+- `stack.git.remote` → take the last segment, lowercase, replace non-alnum with `-`. e.g. `github.com/<org>/<repo>` → `<repo>-<org>` is OK, but a safer default is just `<repo>`.
 - If no git, use the basename of `projectRoot`.
 
 If `answers.profileNameOverride` is provided, slugify it for the id.
@@ -148,7 +147,7 @@ Always include `sectionAttribute: "data-section"` and `i18nKeyAttribute: "data-i
 - `supportedLocales` from `stack.locales` (empty array if none detected)
 - `defaultLocale` from `stack.defaultLocale`
 - `type` from `stack.localeStrategy.type`. If `supportedLocales.length <= 1`, force `type: "none"`.
-- `prefixDefaultLocale`: copy from `stack.localeStrategy.prefixDefaultLocale` when `type === "url-prefix"`. Omit otherwise. The QA Annotator extension uses this to decide whether `/about-us/` is the EN page (false) or whether `/en/about-us/` is required (true).
+- `prefixDefaultLocale`: copy from `stack.localeStrategy.prefixDefaultLocale` when `type === "url-prefix"`. Omit otherwise. The QA Annotator extension uses this to decide whether `/<page-path>/` is the default-locale page (false) or whether `/<defaultLocale>/<page-path>/` is required (true).
 
 ### `sections`
 
@@ -158,10 +157,10 @@ For each section, if `stack.figmaSections` has an entry with the same `sectionNa
 
 ```jsonc
 {
-  "name": "HeroSection",
-  "file": "src/components/sections/HeroSection.astro",
+  "name": "<SectionName>",
+  "file": "src/components/sections/<SectionName>.astro",
   "figma": {
-    "nodeId": "3880:2925",
+    "nodeId": "1234:5678",
     "viewportVariants": { "desktop": "...", "tablet": "...", "mobile": "..." }
   }
 }
@@ -177,9 +176,9 @@ NEW field, peer of `sections`. Build from `stack.figmaPages`:
 ```jsonc
 "pages": [
   {
-    "name": "home",
+    "name": "<page-name>",
     "figma": {
-      "nodeId": "3880:2879",
+      "nodeId": "1234:5678",
       "viewportVariants": { "desktop": "...", "tablet": "...", "mobile": "..." }
     }
   }
@@ -196,7 +195,7 @@ Build one entry per `stack.routes[]` entry:
   - Honor `localeStrategy.prefixDefaultLocale`. When `false`, the locale prefix is optional: `^/(<loc1>|<loc2>|...)?(<route-path>)/?$`. When `true`, it's required: `^/(<loc1>|<loc2>|...)(<route-path>)/?$`. When `localeStrategy.type !== "url-prefix"`, just use `^<route-path>/?$`.
   - The home route's path is `/` — use `^/(<locales>)?/?$` (no extra path segment).
   - Escape regex meta-chars in the route path. Bracketed dynamic segments like `[slug]` become `[^/]+`.
-- **`pageName`** — `route.name` (`"home"`, `"about-us"`, etc.)
+- **`pageName`** — `route.name` (e.g. `"home"`, `"<page-name>"`, etc.)
 
 Skip routes whose name starts with `_` (Astro/Next conventions for layouts/error pages). Skip API routes.
 
