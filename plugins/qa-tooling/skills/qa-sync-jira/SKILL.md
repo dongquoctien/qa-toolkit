@@ -14,7 +14,7 @@ Push a `qa-report-v1` JSON into Jira. Used by `/qa:sync`.
   "report":  <parsed qa-report-v1 object>,
   "profile": <parsed qa-profile-v1 object>,
   "config": {
-    "mode":   "subtasks" | "tasks" | "append",
+    "mode":   "subtasks" | "tasks" | "append-comment" | "append-description",
     "parent": "<KEY-NN>" | null,
     "dryRun": false
   }
@@ -28,7 +28,10 @@ Push a `qa-report-v1` JSON into Jira. Used by `/qa:sync`.
 - `mcp__mcp-atlassian__jira_get_issue`
 - `mcp__mcp-atlassian__jira_create_issue`
 - `mcp__mcp-atlassian__jira_add_comment`
+- `mcp__mcp-atlassian__jira_update_issue` (used by `append-description` mode)
 - `mcp__mcp-atlassian__jira_search`
+
+> **Caller responsibility:** the caller (`/qa:sync`) MUST have already obtained user confirmation via `AskUserQuestion` for both **mode** and **parent** before invoking this skill. The skill performs MCP writes immediately and does not re-confirm. If `dryRun` is true, no MCP writes happen regardless.
 
 If `mcp-atlassian` is not available, return `{ error: "mcp-unavailable" }` and stop. Do not fall back to direct HTTP.
 
@@ -41,7 +44,8 @@ Return after running:
   "created": [{ "issueId": "ISS-001", "jiraKey": "ELS-2001", "url": "..." }],
   "skipped": [{ "issueId": "ISS-002", "reason": "already-synced" }],
   "failed":  [{ "issueId": "ISS-003", "error": "<message>" }],
-  "appendCommentKey": "<key if mode=append, else null>"
+  "appendCommentKey": "<key if mode=append-comment, else null>",
+  "appendDescriptionKey": "<key if mode=append-description, else null>"
 }
 ```
 
@@ -49,7 +53,7 @@ Return after running:
 
 ### 1. Resolve parent (if needed)
 
-If `mode` is `subtasks` or `append`, parent must be set. If absent, return `{ error: "no-parent" }`.
+If `mode` is `subtasks`, `append-comment`, or `append-description`, parent must be set. If absent, return `{ error: "no-parent" }`.
 
 Call `jira_get_issue` on the parent. If 404, return `{ error: "parent-not-found", parent }`.
 
@@ -85,9 +89,23 @@ For each `issue` in `report.issues`:
 - Else, call `jira_create_issue`. On success, record `{ issueId: issue.id, jiraKey: result.key, url: result.self || derived }`.
 - On failure, record under `failed` and continue.
 
-### 3. Append mode
+### 3. Append-comment mode
 
 Build one ADF document containing a heading per issue and a compact table. Call `jira_add_comment(parent, body=adfDoc)`. Record the parent key in `appendCommentKey`.
+
+### 3b. Append-description mode
+
+Goal: mutate the parent ticket's `description` field, preserving the existing description on top.
+
+1. Read the parent's current description from the Step 1 `jira_get_issue` response (`fields.description`, ADF or null).
+2. Build the QA report ADF block — same structure as `append-comment` (header + per-issue sections), wrapped under a level-2 ADF heading: `QA session — <profile.name> · <report.scope.date>`.
+3. Compose new description:
+   - If existing description is null/empty → new description = QA block alone.
+   - Else → new description = existing ADF doc + a thematic break (`{ "type": "rule" }`) + QA block content (concat at `content[]` level; do NOT nest one ADF doc inside another).
+4. Call `jira_update_issue(parent, fields: { description: newAdfDoc })`.
+5. Record the parent key in `appendDescriptionKey`.
+
+If `dryRun`, return the prospective new description in a `dryRunPreview.description` field and skip the actual `jira_update_issue` call.
 
 ### 4. Mutate the report
 
@@ -186,9 +204,9 @@ The issue description is a single ADF document. The structure below is a sketch 
   - Else → one paragraph + code-block per element, paragraph reads `(N) <selectors[N]>` and code-block contains `format(computedPerElement[N])`.
 - Else → single code-block from `issue.actual ?? issue.computed`.
 
-### Report-level header (mode `append` only)
+### Report-level header (modes `append-comment` and `append-description`)
 
-When mode is `append`, build one large ADF doc that begins with a summary block before per-issue sections:
+When mode is `append-comment` or `append-description`, build one large ADF doc that begins with a summary block before per-issue sections:
 
 ```
 **QA session — <profile.name> · <report.scope.date>**
