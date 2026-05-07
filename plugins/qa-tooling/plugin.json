@@ -4,7 +4,9 @@
   "displayName": "QA Tooling",
   "version": "0.1.0",
   "description": "QA/QC workflow automation for web projects: auto-detect stack, generate qa-profile.json for the QA Annotator extension, and sync QA reports into Jira via MCP.",
-  "author": "OMH Co",
+  "author": {
+    "name": "OMH Co"
+  },
   "license": "MIT",
   "keywords": ["qa", "qc", "jira", "figma", "astro", "annotator"],
 
@@ -19,20 +21,6 @@
       ]
     }
   },
-
-  "commands": [
-    "commands/qa-init.md",
-    "commands/qa-doctor.md",
-    "commands/qa-sync.md",
-    "commands/qa-figma-sync.md"
-  ],
-
-  "skills": [
-    "skills/qa-detect-stack",
-    "skills/qa-generate-profile",
-    "skills/qa-sync-jira",
-    "skills/qa-figma-crawl"
-  ],
 
   "config": {
     "defaultProfilePath": "docs/qa/qa-profile.json",
