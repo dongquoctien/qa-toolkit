@@ -7,7 +7,8 @@
 //   3. Wait one paint frame so the overlays are actually gone.
 //   4. captureVisibleTab → crop + draw red border.
 //   5. Open modal with screenshots[0] already populated.
-//   6. User can recapture, paste, upload, reorder, delete.
+//   6. User can recapture (re-query selectors, scroll bbox, close modal, draw
+//      inspector-style rings, capture, remove rings, reopen modal), paste, etc.
 (function () {
   const MSG = QA.MSG;
 
@@ -60,13 +61,138 @@
     return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   }
 
-  async function captureCropped(rects) {
+  function snapshotLiveLayout(live) {
+    return live
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return `${r.top.toFixed(2)}:${r.left.toFixed(2)}:${r.width.toFixed(2)}:${r.height.toFixed(2)}`;
+      })
+      .join('|');
+  }
+
+  /** Wait until rects stop moving between frames (lazy layout / scroll tail). */
+  async function waitLiveLayoutStable(live, maxMs = 450) {
+    const t0 = performance.now();
+    let prev = snapshotLiveLayout(live);
+    while (performance.now() - t0 < maxMs) {
+      await new Promise((r) => requestAnimationFrame(r));
+      const next = snapshotLiveLayout(live);
+      if (next === prev) return;
+      prev = next;
+    }
+  }
+
+  async function captureCropped(rects, annotate = true) {
     const r = await rpc({ type: MSG.CAPTURE_VISIBLE });
     if (!r || r.error || !r.dataUrl) {
       console.warn('[QA] capture failed', r?.error);
       return null;
     }
-    return await QA.screenshot.cropAndAnnotate(r.dataUrl, rects);
+    return await QA.screenshot.cropAndAnnotate(r.dataUrl, rects, { annotate });
+  }
+
+  // Slice cap: 8 viewports = ~6400px tall on a 800px screen, ~12s wall time at
+  // 1 capture per ~500ms (Chrome captureVisibleTab quota: ~2/sec/tab).
+  const MAX_SLICES = 8;
+  const SLICE_DELAY_MS = 550;
+
+  /**
+   * Capture every viewport-slice needed to cover docBbox and stitch them.
+   * Falls back to single-shot captureCropped when bbox fits the viewport.
+   *
+   * docRects: [{ x, y, w, h }] in DOCUMENT coords (rect.left + scrollX, etc.)
+   */
+  async function captureStitchedFromDoc(docRects) {
+    if (!docRects || docRects.length === 0) return null;
+
+    let minY = Infinity, maxY = -Infinity;
+    for (const r of docRects) {
+      minY = Math.min(minY, r.y);
+      maxY = Math.max(maxY, r.y + r.h);
+    }
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    const PADDING = 80;
+    const startY = Math.max(0, Math.floor(minY - PADDING));
+    const endY   = Math.ceil(maxY + PADDING);
+    const bboxH  = endY - startY;
+
+    // Single slice fits — use the existing single-shot path with viewport rects.
+    if (bboxH <= vh) {
+      const cx = (Math.min(...docRects.map((r) => r.x)) + Math.max(...docRects.map((r) => r.x + r.w))) / 2;
+      const cy = (minY + maxY) / 2;
+      await scrollAndSettle(Math.max(0, cx - vw / 2), Math.max(0, cy - vh / 2));
+      const viewportRects = docRects.map((r) => ({
+        x: r.x - window.scrollX,
+        y: r.y - window.scrollY,
+        w: r.w, h: r.h
+      }));
+      return await captureCropped(viewportRects, true);
+    }
+
+    // Multi-slice path. scroll positions cover [startY .. endY].
+    const positions = [];
+    let y = startY;
+    while (y < endY && positions.length < MAX_SLICES) {
+      positions.push(y);
+      y += vh;
+    }
+    if (y < endY) {
+      console.warn('[QA] bbox exceeds MAX_SLICES; capturing first', MAX_SLICES, 'viewports only');
+    }
+
+    const slices = [];
+    for (const sy of positions) {
+      await scrollAndSettle(0, sy);
+      // captureVisibleTab is throttled (~2 calls/sec/tab). Pace requests so
+      // none get rejected with "MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND".
+      await new Promise((r) => setTimeout(r, SLICE_DELAY_MS));
+      const r = await rpc({ type: MSG.CAPTURE_VISIBLE });
+      if (!r || r.error || !r.dataUrl) {
+        console.warn('[QA] slice capture failed', r?.error);
+        return null;
+      }
+      slices.push({ dataUrl: r.dataUrl, scrollY: window.scrollY });
+    }
+
+    return await QA.screenshot.cropAndAnnotateStitched({
+      slices,
+      docRects,
+      viewport: { w: vw, h: vh }
+    });
+  }
+
+  /**
+   * scrollTo(left, top) and wait for the scroll to settle.
+   * Listener is registered BEFORE scrollTo so we can't miss a synchronous
+   * scrollend (Chrome 114+). If the requested position equals the current one,
+   * scrollend never fires — the timeout resolves the promise.
+   */
+  async function scrollAndSettle(left, top, timeoutMs = 550) {
+    const atTarget = Math.abs(window.scrollX - left) < 1 && Math.abs(window.scrollY - top) < 1;
+    if (atTarget) { await nextPaint(); return; }
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('scrollend', onEnd);
+        clearTimeout(tid);
+        resolve();
+      };
+      const onEnd = () => finish();
+      const tid = setTimeout(finish, timeoutMs);
+      window.addEventListener('scrollend', onEnd, { passive: true, once: true });
+      window.scrollTo({ left, top, behavior: 'auto' });
+    });
+    await nextPaint();
+  }
+
+  /** Convert viewport-coord rects (rect.x = rect.left) to document coords. */
+  function rectsViewportToDoc(rects) {
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+    return rects.map((r) => ({ x: r.x + sx, y: r.y + sy, w: r.w, h: r.h }));
   }
 
   function makeShot(id, cropped, sourceLabel = 'auto') {
@@ -81,6 +207,48 @@
       source: sourceLabel,
       capturedAt: new Date().toISOString()
     };
+  }
+
+  async function recaptureWithLiveDom(partial, overlayEl) {
+    const spec = partial.elements || [partial.element];
+    const live = spec.map((e) => {
+      if (!e || !e.selector) return null;
+      try {
+        return document.querySelector(e.selector);
+      } catch {
+        return null;
+      }
+    });
+    if (live.some((el) => !el)) {
+      alert('One or more picked elements are no longer on the page; cannot recapture.');
+      return null;
+    }
+
+    // Modal CSS uses `display: flex !important`; inline `display:none` loses.
+    overlayEl.style.setProperty('display', 'none', 'important');
+    overlayEl.style.setProperty('visibility', 'hidden', 'important');
+    await nextPaint();
+    await waitLiveLayoutStable(live, 400);
+
+    // Document-coord rects: rect.left + scrollX. Stitching path will handle
+    // tall bboxes (header + footer) by capturing multiple viewport slices.
+    const docRects = live.map((el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        x: Math.round(r.left + window.scrollX),
+        y: Math.round(r.top  + window.scrollY),
+        w: Math.round(r.width),
+        h: Math.round(r.height)
+      };
+    });
+
+    try {
+      const cropped = await captureStitchedFromDoc(docRects);
+      return makeShot(partial.id, cropped, 'auto');
+    } finally {
+      overlayEl.style.removeProperty('display');
+      overlayEl.style.removeProperty('visibility');
+    }
   }
 
   async function startInspector() {
@@ -130,25 +298,18 @@
     });
 
     // Auto-capture BEFORE opening modal — overlays are already hidden.
+    // Convert viewport-coord rects to document coords so stitching can decide
+    // whether the bbox needs more than one viewport (e.g. picked header + footer).
     const rects = (partial.elements || [partial.element]).map((e) => e.rect);
-    const initialCrop = await captureCropped(rects);
+    const docRects = rectsViewportToDoc(rects);
+    const initialCrop = await captureStitchedFromDoc(docRects);
     const firstShot = makeShot(partial.id, initialCrop, 'auto');
     partial.screenshots = firstShot ? [firstShot] : [];
     // Maintain back-compat alias
     partial.screenshot = partial.screenshots[0] || null;
 
     const result = await QA.formModal.open(partial, {
-      // Recapture: hide modal, capture, restore.
-      onRecapture: async (overlayEl) => {
-        overlayEl.style.visibility = 'hidden';
-        await nextPaint();
-        try {
-          const cropped = await captureCropped(rects);
-          return makeShot(partial.id, cropped, 'auto');
-        } finally {
-          overlayEl.style.visibility = '';
-        }
-      },
+      onRecapture: (overlayEl) => recaptureWithLiveDom(partial, overlayEl),
       // Paste from clipboard image (returns one shot or null).
       onPasteFromClipboard: async () => {
         try {

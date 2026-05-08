@@ -2,6 +2,10 @@
 
 > Click any element on a live site → log a QA issue with computed styles, a cropped screenshot, and a deeplink to the matching Figma frame. Sync to Jira via Claude Code.
 
+<p align="center">
+  <img src="img/issue-modal.png" alt="In-page issue modal with auto-captured screenshot, computed styles, and auto-matched Figma deeplink" width="780" />
+</p>
+
 Two pieces, one repo:
 
 | Piece | What it is | Audience |
@@ -54,6 +58,30 @@ See [`plugins/qa-tooling/README.md`](plugins/qa-tooling/README.md) for all four 
 4. End of session: popup → Export ZIP
 5. Dev runs /qa:sync → Jira sub-tasks created
 ```
+
+### Toolbar popup
+
+Pick the active profile, start the Inspector, and export reports as JSON / Markdown / ZIP.
+
+<p align="center">
+  <img src="img/popup.png" alt="Toolbar popup: profile selector, Start Inspector button, JSON/MD/ZIP exports" width="320" />
+</p>
+
+### Settings — profiles, Figma trees, theme
+
+Import a `qa-profile.json` and a `qa-figma-tree.json` per project. The active profile drives URL detection, locale strategy, and Figma auto-fill.
+
+<p align="center">
+  <img src="img/settings-profiles.png" alt="Settings page: import profile, saved profiles table, Figma frame tree import" width="780" />
+</p>
+
+### Settings — saved issues + report import
+
+Edit / delete saved issues without re-picking. Re-import a previously exported ZIP or JSON to bring issues back (skips duplicate IDs).
+
+<p align="center">
+  <img src="img/settings-issues.png" alt="Settings page: saved issues table with edit/delete and Import issues button; theme color swatches" width="780" />
+</p>
 
 ---
 
