@@ -93,7 +93,12 @@ When Claude Code runs `/qa:figma-sync`, it reads `plugins/qa-tooling/commands/qa
 | `src/background/service-worker.js` | Storage owner. **`compressTree` accepts both long-form and short-form keys** — always use `?? short` fallback when reading tree fields. |
 | `src/profile/profile-manager.js` | ESM profile CRUD with seed-on-install of empty profile. |
 | `src/settings/settings.html`+`.js` | Card order: Import → Saved profiles → Saved issues → Figma tree → Theme color. **Loads `content.css` + `form-modal.js`** so the issue-edit modal can render here exactly as it does in-page. |
-| `src/popup/popup.html`+`.js` | 380px wide. JSON/MD/ZIP export buttons on one row. |
+| `src/popup/popup.html`+`.js` | 380px wide. JSON/MD/ZIP export buttons on one row. **Mode chip** (color-coded per active mode) + **pin summary chip** in header. |
+| `src/core/annotation-editor.js` | Canvas-based post-capture annotator (v0.2.0). Six tools: pin/rect/arrow/text/blur/freehand. Persists flattened PNG + re-editable layer source. Blur uses `getImageData` with `willReadFrequently:true`. |
+| `src/lib/runtime-buffer.js` | **Page MAIN world** ring buffer (v0.2.0). Intercepts console + fetch + XHR + window.error + unhandledrejection. Loaded via web_accessible_resources + `<script>` injection from runtime-bridge. |
+| `src/content/runtime-bridge.js` | Content-script side of the runtime buffer. PostMessage bridge with requestId routing + 250ms timeout fallback. |
+| `src/lib/a11y-scan.js` | axe-core wrapper (v0.2.0). `scan(el)` → trimmed violations + WCAG SC tags, post-filtered to subtree. `quickContrast(el)` → sync ratio calc. |
+| `src/vendor/axe.min.js` | axe-core 4.10.3 bundled (540KB, MPL 2.0). Loaded as content_script when extension is on. |
 
 ### Plugin
 | File | Role |
@@ -176,6 +181,32 @@ Multi-pick issues carry a sparse override array `expectedPerElement` alongside t
 - **No `figma*` keys in overrides**. Figma fields (`figmaLink`, `figmaNodeId`, `figmaBreadcrumb`, `figmaScore`, `figmaViewport`, `figmaAutoMatched`) live only on shared `expected` — there's exactly one Figma anchor per issue. The modal strips these on save; the Jira skill defensively ignores them if a hand-edited report sneaks one in. Don't loosen this on either side.
 
 The Jira skill renders shared and overrides as TWO separate blocks (`**Expected**` and `**Expected — (N) overrides**`). Never merge — the QA author's intent (which fields they chose to override vs. inherit) gets lost when you flatten.
+
+### 13. Settings deep-merge contract (v0.2.0)
+
+`SETTING_SET` payload is shallow-merged at the root, then each *value* (when it's a plain object) is itself shallow-merged onto its prior. So a payload `{ capture: { padding: 40 } }` does NOT wipe `capture.openAnnotationEditor` etc. The two helpers in `service-worker.js` (`mergeSettings` for stored→defaults, `deepShallow` for patch) must stay in sync — break either and users lose siblings on every save. Arrays are *replaced* (intentional — empty `blurSelectors: []` should clear, not preserve defaults).
+
+Legacy v0.1.x users had only `{ inspectorColor: '#xxx' }` saved. `mergeSettings` fills in every new top-level key from `DEFAULT_SETTINGS` so they don't see `undefined.capture.padding` crashes — never break this read path.
+
+### 14. axe-core scope filter is post-hoc
+
+axe's `include: [[element]]` is a *starting context*, not a strict subtree filter. Some rules (`color-contrast`, page-level checks) still report nodes outside the scope. `a11y-scan.js#scan` post-filters using `element.contains(violationNode)` — without this filter, picking element A surfaces violations from sibling element B, which is confusing and wrong. Don't drop the filter when "optimizing".
+
+### 15. Runtime buffer = page MAIN world only
+
+Console + network interception MUST run in the page's MAIN world, not the isolated content script. Each world has its own `window.fetch` reference — overriding from the isolated script catches only requests made *by* extension code (zero of them). `runtime-buffer.js` is loaded via `<script src="…">` injection from `runtime-bridge.js` because MV3 isolated content scripts cannot directly grab page globals. The script uses `__qaRuntimeBufferLoaded` guard for idempotency (content script may inject twice on settings change). Bridge protocol: `window.postMessage({ src: 'qa-ext', type: 'config'|'request'|'clear' })` → buffer replies with `{ src: 'qa-runtime', type: 'snapshot'|'ready', requestId }`. RequestId routing is critical so concurrent snapshots don't cross.
+
+### 16. `willReadFrequently: true` on annotation base canvas
+
+Blur tool calls `baseCtx.getImageData()` repeatedly to sample pixel colors for pixelation. Without the `{ willReadFrequently: true }` hint, Chrome falls back to GPU→CPU readback on every call (slow + console warning "Multiple readback operations using getImageData are faster with the willReadFrequently attribute"). Only set on `baseCtx` (the canvas blur reads from), not on `drawCtx`/`cursorCtx`. The flatten output canvas reuses `baseCtx` as sampling source rather than creating a second hinted context.
+
+### 17. Severity hotkey skips inputs (both `e.target` AND `activeElement`)
+
+`form-modal.js#onKey` checks BOTH `e.target` and `document.activeElement` before treating a number key as a severity hotkey. Synthetic events from `dispatchEvent` set `e.target` to the dispatcher's argument (often `document`) regardless of where focus actually lives. Without the dual check, a user typing "1" in the title input would silently flip severity to critical mid-keystroke. Don't simplify to a single check.
+
+### 18. axe-core bundle (~540KB) only loaded when content_script registered
+
+`axe.min.js` is in `manifest.json#content_scripts.js[]` so Chrome loads it on every matched page. To minimize startup cost, `a11yScan.scan()` first checks `axe.run` exists; the wrapper itself is only called when `settings.sources.a11y === true`. axe rules that need page context (`region`, `landmark-one-main`, `page-has-heading-one`, `document-title`, `html-has-lang`, `bypass`) are explicitly disabled in `runOpts.rules` because subtree-scoped scans can't satisfy them — they'd always report false positives.
 
 ---
 

@@ -20,6 +20,26 @@ header {
 header strong { font-size: 14px; }
 header a { color: var(--qa-accent); text-decoration: none; font-size: 12px; font-weight: 600; }
 header a:hover { color: var(--qa-accent-hover); }
+.mode-chip {
+  margin-left: auto;
+  margin-right: 10px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: var(--qa-accent);
+  border-radius: 10px;
+  white-space: nowrap;
+  cursor: default;
+}
+.mode-chip[data-mode="prod-bug"]        { background: #ef4444; }
+.mode-chip[data-mode="design-fidelity"] { background: #8b5cf6; }
+.mode-chip[data-mode="admin"]           { background: #0ea5e9; }
+.mode-chip[data-mode="a11y"]            { background: #22c55e; }
+.mode-chip[data-mode="i18n"]            { background: #f97316; }
+.mode-chip[data-mode="custom"]          { background: #6b7280; }
 
 .row { padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
 
@@ -62,6 +82,16 @@ button.primary:hover { background: var(--qa-accent-hover); }
   white-space: nowrap;
 }
 .row-stats .count strong { color: #111827; font-size: 13px; }
+.pin-summary {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: #fff;
+  background: var(--qa-accent);
+  border-radius: 10px;
+  font-weight: 600;
+}
 .row-stats .exports { display: flex; gap: 6px; }
 .row-stats button {
   padding: 5px 10px;

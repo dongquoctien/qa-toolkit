@@ -15,14 +15,25 @@
   let activeProfile = null;
   let figmaTree = null;
   let issues = [];
+  let liveSettings = null;
 
   async function init() {
     activeProfile = await rpc({ type: MSG.PROFILE_GET_ACTIVE });
     issues = await rpc({ type: MSG.ISSUE_LIST }) || [];
-    const settings = await rpc({ type: MSG.SETTING_GET });
-    applySettings(settings);
+    liveSettings = await rpc({ type: MSG.SETTING_GET });
+    applySettings(liveSettings);
     await loadFigmaTreeFor(activeProfile);
     QA.overlay.setCount(issues.length);
+    if (QA.inspector?.setMode) QA.inspector.setMode(liveSettings?.mode);
+
+    // Bring up the page-world runtime buffer if console/network capture is
+    // turned on for this mode. Inject is idempotent so flipping the toggle
+    // mid-session doesn't double-up.
+    if (QA.runtimeBridge && (liveSettings?.sources?.consoleErrors || liveSettings?.sources?.networkFailures)) {
+      QA.runtimeBridge.inject();
+      await QA.runtimeBridge.whenReady();
+      QA.runtimeBridge.configure(liveSettings);
+    }
   }
 
   async function loadFigmaTreeFor(profile) {
@@ -209,6 +220,26 @@
     };
   }
 
+  // Wrap a fresh shot with the annotation editor — used by recapture / paste /
+  // upload paths so the user gets the same annotate-before-save flow as the
+  // initial capture. Honors settings.capture.openAnnotationEditor.
+  async function maybeAnnotate(shot, severity) {
+    if (!shot || !shot.dataUrl) return shot;
+    if (liveSettings?.capture?.openAnnotationEditor === false) return shot;
+    if (!QA.annotationEditor) return shot;
+    const annotated = await QA.annotationEditor.open({
+      dataUrl: shot.dataUrl,
+      annotations: shot.annotations,
+      settings: liveSettings,
+      severity
+    });
+    if (annotated) {
+      shot.dataUrl = annotated.dataUrl;
+      shot.annotations = annotated.annotations;
+    }
+    return shot;
+  }
+
   async function recaptureWithLiveDom(partial, overlayEl) {
     const spec = partial.elements || [partial.element];
     const live = spec.map((e) => {
@@ -244,10 +275,16 @@
 
     try {
       const cropped = await captureStitchedFromDoc(docRects);
-      return makeShot(partial.id, cropped, 'auto');
-    } finally {
+      const shot = makeShot(partial.id, cropped, 'auto');
+      // Restore overlay BEFORE opening annotation editor so the modal is
+      // visible underneath when user cancels editor.
       overlayEl.style.removeProperty('display');
       overlayEl.style.removeProperty('visibility');
+      return await maybeAnnotate(shot, partial.severity);
+    } catch (e) {
+      overlayEl.style.removeProperty('display');
+      overlayEl.style.removeProperty('visibility');
+      throw e;
     }
   }
 
@@ -294,8 +331,47 @@
       profile: activeProfile,
       adapter,
       existingIds: issues.map((i) => i.id),
-      figmaTree
+      figmaTree,
+      settings: liveSettings
     });
+
+    // Attach the runtime buffer's current snapshot. This is the moment the
+    // user clicked, so console errors and network failures from the seconds
+    // before the click are most likely the cause they want to file.
+    if (QA.runtimeBridge && (liveSettings?.sources?.consoleErrors || liveSettings?.sources?.networkFailures)) {
+      try {
+        const snap = await QA.runtimeBridge.snapshot();
+        if (snap?.available) {
+          partial.runtimeContext = {
+            console: liveSettings?.sources?.consoleErrors ? snap.console : [],
+            network: liveSettings?.sources?.networkFailures ? snap.network : [],
+            env: snap.env
+          };
+        }
+      } catch (e) {
+        console.warn('[QA] runtime snapshot failed', e);
+      }
+    }
+
+    // axe-core scoped scan on the primary element subtree. Slow path (~150ms
+    // on a small subtree, more for large) so we only run when the user opted
+    // in via Settings → Capture sources → Accessibility.
+    if (QA.a11yScan && liveSettings?.sources?.a11y) {
+      const primaryEl = elements[0];
+      if (primaryEl) {
+        try {
+          const violations = await QA.a11yScan.scan(primaryEl);
+          const contrast = QA.a11yScan.quickContrast(primaryEl);
+          partial.a11yFindings = {
+            scanAt: new Date().toISOString(),
+            violations,
+            contrast
+          };
+        } catch (e) {
+          console.warn('[QA] axe scan failed', e);
+        }
+      }
+    }
 
     // Auto-capture BEFORE opening modal — overlays are already hidden.
     // Convert viewport-coord rects to document coords so stitching can decide
@@ -303,12 +379,29 @@
     const rects = (partial.elements || [partial.element]).map((e) => e.rect);
     const docRects = rectsViewportToDoc(rects);
     const initialCrop = await captureStitchedFromDoc(docRects);
-    const firstShot = makeShot(partial.id, initialCrop, 'auto');
+    let firstShot = makeShot(partial.id, initialCrop, 'auto');
+
+    // Hand off to the annotation editor when enabled. The editor returns a
+    // flattened dataUrl + the layer sources so settings page can re-edit.
+    if (firstShot && liveSettings?.capture?.openAnnotationEditor !== false && QA.annotationEditor) {
+      const annotated = await QA.annotationEditor.open({
+        dataUrl: firstShot.dataUrl,
+        settings: liveSettings,
+        severity: partial.severity
+      });
+      if (annotated) {
+        firstShot.dataUrl = annotated.dataUrl;
+        firstShot.annotations = annotated.annotations;
+        firstShot.source = 'auto-annotated';
+      }
+    }
+
     partial.screenshots = firstShot ? [firstShot] : [];
     // Maintain back-compat alias
     partial.screenshot = partial.screenshots[0] || null;
 
     const result = await QA.formModal.open(partial, {
+      settings: liveSettings,
       onRecapture: (overlayEl) => recaptureWithLiveDom(partial, overlayEl),
       // Paste from clipboard image (returns one shot or null).
       onPasteFromClipboard: async () => {
@@ -319,7 +412,8 @@
               if (t.startsWith('image/')) {
                 const blob = await item.getType(t);
                 const dataUrl = await blobToDataUrl(blob);
-                return makeShot(partial.id, { dataUrl, crop: null }, 'paste');
+                const shot = makeShot(partial.id, { dataUrl, crop: null }, 'paste');
+                return await maybeAnnotate(shot, partial.severity);
               }
             }
           }
@@ -332,7 +426,8 @@
       onUploadFile: async (file) => {
         if (!file || !file.type.startsWith('image/')) return null;
         const dataUrl = await blobToDataUrl(file);
-        return makeShot(partial.id, { dataUrl, crop: null }, 'upload');
+        const shot = makeShot(partial.id, { dataUrl, crop: null }, 'upload');
+        return await maybeAnnotate(shot, partial.severity);
       }
     });
 
@@ -376,7 +471,15 @@
             return;
           }
           case MSG.SETTING_CHANGED: {
-            applySettings(message.payload);
+            liveSettings = message.payload || liveSettings;
+            applySettings(liveSettings);
+            if (QA.inspector?.setMode) QA.inspector.setMode(liveSettings?.mode);
+            // Push the new privacy/source flags into the page-world buffer so
+            // the user can flip toggles in Settings without reloading the tab.
+            if (QA.runtimeBridge && (liveSettings?.sources?.consoleErrors || liveSettings?.sources?.networkFailures)) {
+              QA.runtimeBridge.inject();
+              QA.runtimeBridge.whenReady().then(() => QA.runtimeBridge.configure(liveSettings));
+            }
             sendResponse({ ok: true });
             return;
           }

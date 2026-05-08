@@ -3,6 +3,153 @@
 > Last updated: 2026-05-08
 > Owner: itdongquoctien
 
+---
+
+## ✅ Sprint 1 — v0.2.0 (shipped 2026-05-08)
+
+> The user's ask was: extension currently only catches CSS/computed mismatches; grow it into a real QA workhorse covering frontend AND admin systems. Specifically: numbered/annotated screenshots ("chụp ảnh đánh số và chú thích"), bug area + fix area markup ("phần lỗi, phần nên sửa"), and works without Figma (PROD bugs, admin systems).
+
+### Sprint 1 result — 8 features shipped
+
+| # | Task | Files |
+|---|---|---|
+| 1.1 | **Settings expansion** — QA mode picker (PROD-bug / Design-fidelity / Admin / A11y / i18n / Custom), capture prefs, privacy & redaction, capture-sources grid, issue defaults, integrations, inspector behavior | `src/settings/settings.html`, `settings.js`, `settings.css`, `service-worker.js` (DEFAULT_SETTINGS + deepShallow merge) |
+| 1.2 | **Annotation editor** — canvas overlay: numbered pin auto-increment, arrow, rectangle (red=bug / green=expected / info), text callout, freehand, blur PII (pixelate sampling base canvas). Undo/redo, hotkeys P/R/A/T/B/F. Persist as flattened PNG + annotations source for re-edit | `src/core/annotation-editor.js` (~480 LOC), `form-modal.js` (✎ thumb badges), `content.js` (maybeAnnotate hook), `content.css`, `manifest.json` |
+| 1.3 | **Console + network capture** — world MAIN inject, ring-buffer last 50 console errors + 20 failed requests, attached at pick. Honors `settings.privacy.redactPatterns`. Bridge via `window.postMessage` with requestId routing | `src/lib/runtime-buffer.js`, `src/content/runtime-bridge.js`, `form-modal.js` (renderRuntimeContext), `content.js`, `manifest.json` (web_accessible_resources) |
+| 1.4 | **Accessibility quick-scan** — axe-core 4.10.3 bundled (~540KB MPL), `scan(el)` → trimmed violations + WCAG SC tags, `quickContrast(el)` → sync ratio calc. Contrast badge on inspector tooltip when mode=a11y. Subtree filter so violations don't leak from sibling subtrees | `src/vendor/axe.min.js`, `src/lib/a11y-scan.js`, `form-modal.js` (renderA11yFindings), `inspector.js` (setMode + badge), `content.js`, `manifest.json` |
+| 1.5 | **Issue defaults** — title template substitution (`{{section}}/{{page}}/{{viewport}}/{{tag}}/{{element}}/...`), auto-tag rules from URL regex, severity hotkeys 1/2/3/4, required-field validation gate (banner + red outline + auto-clear on input) | `issue-builder.js#expandTemplate`, `computeAutoTags`, `form-modal.js#validateRequired`, `content.css` |
+| 1.6 | **Mode-scoped settings UI** — `data-modes` attribute filters cards visible per mode. Primary cards highlighted (pink border + "recommended" tag), non-primary auto-collapse. "Show all cards" link to break out. Hint banner per mode | `settings.html` (data-modes attrs), `settings.js` (applyModeVisibility, MODES presets), `settings.css` |
+| 1.7 | **Mode + pin count UX surface** — popup mode chip (color-coded per mode: red/purple/blue/green/orange/gray) + total pin chip. Modal mode chip + pin chip in header. Per-thumbnail pin/annot badges. Issues table "Annotations" column | `popup.html/js/css` (mode-chip, pin-summary), `form-modal.js` (modeChip, pinChip, qa-thumb-pin-badge, qa-thumb-annot-badge), `settings.html/js` (Annotations column) |
+| 1.8 | **Card reorder** — workflow logic order: Setup → Data → Workflow tuning (Inspector first) → Output (Integrations) → Cosmetic (Theme) → Footer (Advanced). Inspector behavior moved 12→6, Theme color moved 6→12 | `settings.html` |
+
+### Settings storage schema (expanded — backward-compatible default-merge)
+
+```js
+chrome.storage.local["settings"] = {
+  // existing
+  inspectorColor: "#ec4899",
+
+  // NEW — first-run mode picker; presets others
+  mode: "prod-bug",                     // prod-bug | design-fidelity | admin | a11y | i18n | custom
+  modeChosenAt: "2026-05-08T...",       // null until user picks once
+
+  // capture
+  capture: {
+    openAnnotationEditor: true,         // open editor after capture before save
+    pinStyle: "circle-number",          // circle-number | square-number | letter | prefix
+    pinPrefix: "",                      // "BUG-" → BUG-1, BUG-2
+    pinColorMode: "accent",             // accent | severity
+    defaultTool: "pin",                 // pin | rect | arrow | text | blur | freehand
+    padding: 80,
+    stitchingMaxSlices: 8,
+    autoCapture: true,                  // false = manual button, no auto on pick
+    pngQuality: "standard",             // low | standard | high
+    hideSelectorsBeforeCapture: []      // CSS selectors to display:none for capture window
+  },
+
+  // privacy & redaction
+  privacy: {
+    blurSelectors: [
+      "input[type=password]",
+      "input[type=email]",
+      "[data-pii]"
+    ],
+    redactPatterns: [],                 // regex source strings, applied to console + network bodies
+    rrwebStripStorage: true,
+    hashUserIds: false,
+    rrwebAllowlistDomains: []
+  },
+
+  // capture sources — what auto-attaches at pick
+  sources: {
+    computed: true,
+    source: true,
+    consoleErrors: false,
+    networkFailures: false,
+    a11y: false,
+    rrweb: false,                       // Sprint 2
+    appState: false,                    // Sprint 2
+    perfMetrics: false                  // Sprint 2
+  },
+
+  // issue defaults
+  defaults: {
+    severity: "minor",
+    type: "bug",
+    requiredFields: ["title", "severity"],
+    titleTemplate: "",                  // "[{{section}}] " expanded at build time
+    severityColors: {
+      critical: "#ef4444",
+      major: "#f97316",
+      minor: "#eab308",
+      info: "#3b82f6"
+    },
+    autoTagRules: [],                   // [{ pattern: "/admin/", tag: "area:admin" }]
+    severityHotkeys: { "1": "critical", "2": "major", "3": "minor" }
+  },
+
+  // integrations (optional overrides on top of profile)
+  integrations: {
+    jiraProjectKey: "",
+    jiraAssignee: "",
+    jiraLabels: [],
+    jiraParent: "",
+    slackWebhook: "",
+    githubRepo: "",
+    figmaToken: ""
+  },
+
+  // inspector behavior
+  inspector: {
+    thickness: 3,
+    style: "solid",
+    showTooltip: true,
+    tooltipFields: ["tag", "classes", "computed", "breakpoint"],
+    clickThrough: false,
+    domainBlocklist: [],
+    autoStopAfterPick: true,
+    shortcuts: { pick: "click", multi: "shift+click", done: "Enter", stop: "Escape" }
+  },
+
+  // advanced
+  advanced: {
+    debugLogging: false
+  }
+}
+```
+
+### Mode presets — what each mode toggles
+
+| Mode | sources.* on by default | UI changes |
+|---|---|---|
+| `prod-bug` | computed, source, consoleErrors, networkFailures | Figma block hidden in modal |
+| `design-fidelity` | computed, source | Figma block prominent + token suggestion (Sprint 2) |
+| `admin` | computed, source, consoleErrors, networkFailures, appState | App-state row in modal |
+| `a11y` | computed, source, a11y | A11y tab open by default; contrast badge always |
+| `i18n` | computed, source | Pseudolocale toggle in popup; locale switcher row |
+| `custom` | (user picks) | All toggles surfaced |
+
+### Annotation file format (`screenshots[i].annotations`)
+
+```js
+{
+  width: 1280, height: 720,
+  layers: [
+    { type: "pin",  x: 120, y: 80, n: 1, color: "#ef4444", note: "wrong padding" },
+    { type: "rect", x: 100, y: 60, w: 200, h: 100, color: "#ef4444", role: "bug" },
+    { type: "rect", x: 320, y: 60, w: 200, h: 100, color: "#22c55e", role: "expected" },
+    { type: "arrow", x1: 150, y1: 110, x2: 320, y2: 110, color: "#0ea5e9" },
+    { type: "text", x: 220, y: 50, text: "should match design", color: "#1f2937", font: "14px" },
+    { type: "blur", x: 50, y: 200, w: 100, h: 30, radius: 8 },
+    { type: "freehand", points: [[10,10],[20,15],...], color: "#ef4444", width: 2 }
+  ]
+}
+```
+
+`dataUrl` = the *flattened* PNG (already drawn). `annotations` = re-editable source. Settings page modal can re-open editor on a saved issue and reload these layers.
+
+---
+
 ## Big picture
 
 Two-piece QA tooling for any web project:
@@ -20,6 +167,43 @@ The two are linked by **two files** generated by the plugin and consumed by the 
 ---
 
 ## ✅ Done
+
+### Extension (v0.2.0 — Sprint 1, 2026-05-08)
+
+#### QA modes (workflow presets)
+- Six modes: `prod-bug` (live site bugs), `design-fidelity` (Figma compare), `admin` (CMS / internal), `a11y` (accessibility), `i18n` (localization), `custom` (user-tuned).
+- First-run picker in Settings → "QA mode" card. Each mode auto-toggles `sources.*` defaults and surfaces only the relevant Settings cards (data-modes attribute on each card).
+- Mode chip color-coded across popup header, modal header — red/purple/blue/green/orange/gray per mode.
+
+#### Annotation editor (canvas, post-capture)
+- Opens after auto-capture (toggleable via `settings.capture.openAnnotationEditor`).
+- Six tools: numbered pin (auto-increment, four styles: circle/square/letter/prefix), rectangle (red=bug / green=expected / accent=info), arrow with arrowhead, text callout, blur (pixelate sampling base canvas — PII redaction), freehand pen.
+- Undo / Redo (Ctrl+Z / Ctrl+Shift+Z, 30-snapshot history). Hotkeys P/R/A/T/B/F.
+- Persists both flattened PNG (`screenshots[i].dataUrl`) AND re-editable annotation source (`screenshots[i].annotations.layers[]`). Settings page can re-open editor on saved issues.
+
+#### Console + network capture (page-world ring buffer)
+- World MAIN injection via `web_accessible_resources` + `<script>` tag. Idempotent guard `__qaRuntimeBufferLoaded`.
+- Intercepts `console.error`, `console.warn`, `window.error`, `unhandledrejection`, `fetch`, `XMLHttpRequest`. Only failures (status ≥ 400 or thrown) are buffered.
+- Ring buffers: 50 console events, 20 network failures.
+- `settings.privacy.redactPatterns` (regex source strings) scrub bodies + URLs before storage.
+- Bridge via `window.postMessage({ src: 'qa-ext'/'qa-runtime' })` with requestId routing. 250ms timeout fallback.
+
+#### Accessibility scan (axe-core 4.10.3)
+- Bundled in `src/vendor/axe.min.js` (~540KB, MPL 2.0). Loaded as content_script.
+- `QA.a11yScan.scan(element)` — axe.run scoped to subtree, post-filtered so violations from sibling subtrees don't leak through. Returns trimmed violations with WCAG SC tags + helpUrl.
+- `QA.a11yScan.quickContrast(element)` — synchronous WCAG 2.x AA contrast calc (no axe call). Used by inspector tooltip when `mode === 'a11y'` to render a `✓ 4.5:1` / `✗ 2.34:1` badge.
+
+#### Issue defaults (settings-driven)
+- Title template substitution: `{{section}}`, `{{page}}`, `{{viewport}}`, `{{breakpoint}}`, `{{tag}}`, `{{element}}`, `{{i18nKey}}`, `{{url}}` expanded at issue-build time.
+- Auto-tag rules: URL regex match → `issue.tags[]` populated. Bad regex skipped silently.
+- Severity hotkeys: 1=critical, 2=major, 3=minor, 4=info (configurable). Skips when typing in input/textarea/select.
+- Required-field validation: banner + red outline on missing fields. Save button blocked. Auto-clears on input.
+
+#### Mode + pin count UX surfacing
+- Popup header: mode chip ("PROD BUG" / "Design" / "Admin" / "A11y" / "i18n" / "Custom") with mode-specific color. Issues count + total pin chip ("4 pins").
+- Modal header: ID badge + mode chip + 📍N pin chip + viewport chip + section/source + close.
+- Each thumbnail: 📍N pin badge + ✦N other-shapes badge (rect/arrow/text/blur).
+- Settings issues table: "Annotations" column with 📍N + ✦N tags + "X/Y shots" hint.
 
 ### Extension (Phase 1)
 
