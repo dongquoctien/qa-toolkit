@@ -257,6 +257,12 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
 }
 
 /* Validation banner — shown when required fields are missing on save */
+.qa-ext-ui .qa-req {
+  color: #ef4444 !important;
+  font-weight: 700 !important;
+  margin-left: 2px !important;
+}
+
 .qa-ext-ui .qa-validation-banner {
   background: #fef2f2 !important;
   color: #b91c1c !important;

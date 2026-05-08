@@ -5,6 +5,58 @@
 
 ---
 
+## ✅ Sprint 3 — v0.4.0 (shipped 2026-05-08)
+
+> User asked: per-mode form builder so each QA mode has its own visible/required fields. Research showed Linear/Jira/Notion patterns — landed on Notion-style table + Jira 3-state pill, scoped by mode tabs.
+
+### Sprint 3 result — form builder per mode
+
+| # | Task | Files |
+|---|---|---|
+| 3.1 | **Form config schema + resolver** — `DEFAULT_FORM_CONFIG[mode]` per-mode defaults. `getEffectiveFormConfig(mode, settings)` deep-merges user override on top of defaults. Field state: 'hidden' \| 'optional' \| 'required'. Sub-field schema declared per panel for v0.5.0 expand-row UI. | `src/core/form-config.js` (~200 LOC) |
+| 3.2 | **Settings UI — form builder card** — tabs across 6 modes, table of common fields + panels, 3-state segmented pill (Hidden/Optional/Required). Toolbar: Copy from another mode + Reset to defaults. | `settings.html`, `settings.js` (~150 LOC), `settings.css` |
+| 3.3 | **Form modal integration** — reads `getFormConfig()` per render. Common rows (Title/Severity/Type/Note/Expected CSS/Figma/Screenshots) render conditionally based on `fieldVisible(formCfg, id)`. Required indicator (red asterisk). Validation gate uses `fieldRequired()`. Panel registry consults form config for visibility. | `form-modal.js` (~80 LOC delta), `panel-registry.js#panelsForMode` (form-config aware) |
+| 3.4 | **Docs + release** — bump 0.3.0 → 0.4.0, STATUS / CLAUDE / README updated, tag v0.4.0 | docs + manifest |
+
+### Schema
+
+```js
+settings.modeForms = {
+  'prod-bug': {
+    fields: { title: 'required', severity: 'required', type: 'optional', note: 'optional', expectedCss: 'hidden', figmaLink: 'hidden', screenshots: 'optional' },
+    panels: { 'runtime-context': { state: 'required', fields: { reproSteps: 'required' } } }
+  },
+  'design-fidelity': { /* ... */ },
+  // ...
+}
+```
+
+### Default form config per mode
+
+| Mode | Required common fields | Required panel | Hidden fields |
+|---|---|---|---|
+| prod-bug | title · severity | runtime-context | expectedCss · figmaLink |
+| design-fidelity | title | design-fidelity | (none — show Figma + Expected) |
+| admin | title · severity | app-state | expectedCss · figmaLink |
+| a11y | title · severity | a11y-findings | expectedCss · figmaLink |
+| i18n | title | i18n-findings | expectedCss · figmaLink |
+| custom | title · severity | (none required) | (none — all visible) |
+
+### Verified live via chrome-devtools MCP
+
+- ✅ 6 tabs render, prod-bug active default
+- ✅ 13 rows (7 common + 6 panels), each with 3-state pill
+- ✅ Pill toggle persists to `settings.modeForms[mode].fields[field]`
+- ✅ Locked pill on core fields (Title/Severity always required, can't change)
+- ✅ Hidden = gray pill, Optional = blue, Required = pink (theme accent)
+- ✅ Modal validation reads required fields from form config (not legacy `defaults.requiredFields`)
+- ✅ Modal renders only visible fields per mode
+- ✅ Required asterisk (red `*`) on labels of required fields
+- ✅ "Copy from" toolbar button copies config from one mode to another
+- ✅ "Reset to defaults" clears user override for active tab
+
+---
+
 ## ✅ Sprint 2 — v0.3.0 (shipped 2026-05-08)
 
 > User asked: each QA mode needs its own form fields, not the same form for everything. Research showed Linear-style "issue type" pattern hides irrelevant fields. Approach 2 — dynamic panel registry — picked.

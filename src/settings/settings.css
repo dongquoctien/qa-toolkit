@@ -210,33 +210,119 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 /* Settings status helpers */
 #storage-usage, #settings-version { margin-top: 4px; }
 
-/* Custom mode panels grid */
-.custom-panels-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 8px;
-  margin-top: 8px;
-}
-.custom-panel-row {
+/* QA issue form builder per mode */
+.form-builder-tabs {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  gap: 4px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.form-builder-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px;
+  font: 600 13px inherit;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 0;
+}
+.form-builder-tabs button:hover { color: var(--qa-fg, #111827); }
+.form-builder-tabs button.active {
+  color: var(--qa-accent);
+  border-bottom-color: var(--qa-accent);
+}
+.form-builder-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-bottom: 1px dashed #e5e7eb;
+}
+.form-builder-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.form-builder-toolbar select {
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+}
+.form-builder-toolbar button {
+  font: 600 12px inherit;
+  padding: 5px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
   background: #fff;
   cursor: pointer;
 }
-.custom-panel-row:hover { border-color: var(--qa-accent); }
-.custom-panel-row input[type=checkbox] {
-  margin-top: 3px;
-  accent-color: var(--qa-accent);
-  flex-shrink: 0;
+.form-builder-toolbar button.danger { color: #b91c1c; border-color: #fecaca; }
+.form-builder-toolbar button.danger:hover { background: #fef2f2; }
+
+.fb-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
 }
-.custom-panel-body { display: flex; flex-direction: column; gap: 2px; }
-.custom-panel-body strong { font-size: 13px; }
-.custom-panel-body small { font-size: 11px; color: #6b7280; }
-.custom-panel-body code { font: 11px ui-monospace, monospace; color: #374151; }
+.fb-table th, .fb-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+.fb-table th { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+.fb-state-th { width: 290px; text-align: right; }
+.fb-section-head td {
+  background: #f9fafb;
+  font: 600 11px inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  padding: 6px 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.fb-row[data-locked="1"] .fb-name { opacity: 0.7; }
+.fb-name strong { font-size: 13px; }
+.fb-name small { display: block; font-size: 11px; color: #6b7280; margin-top: 2px; }
+.fb-name code { font: 11px ui-monospace, monospace; color: #374151; }
+.fb-state { text-align: right; }
+
+/* 3-state segmented pill */
+.fb-pill {
+  display: inline-flex;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  overflow: hidden;
+}
+.fb-pill-locked { opacity: 0.5; }
+.fb-pill-btn {
+  font: 600 11px inherit;
+  padding: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 80ms ease, color 80ms ease;
+}
+.fb-pill-btn:not(:last-child) { border-right: 1px solid #e5e7eb; }
+.fb-pill-btn:hover:not(:disabled) { background: #f3f4f6; color: var(--qa-fg, #111827); }
+.fb-pill-btn.is-active {
+  color: #fff;
+  background: var(--qa-accent);
+}
+.fb-pill-btn.is-active[data-state="hidden"]   { background: #6b7280; }
+.fb-pill-btn.is-active[data-state="optional"] { background: #3b82f6; }
+.fb-pill-btn.is-active[data-state="required"] { background: var(--qa-accent); }
+.fb-pill-btn:disabled { cursor: not-allowed; }
 
 /* Mode-scoped visibility */
 .card.qa-mode-hidden,
