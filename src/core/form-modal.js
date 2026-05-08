@@ -29,7 +29,7 @@
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
       overlay.className = 'qa-ext-ui qa-modal-overlay';
-      overlay.innerHTML = renderHtml(issue);
+      overlay.innerHTML = renderHtml(issue, opts);
       document.documentElement.appendChild(overlay);
 
       const $$ = (sel) => overlay.querySelectorAll(sel);
@@ -138,20 +138,23 @@
         });
       };
 
-      // Recapture
-      $('.qa-recapture').addEventListener('click', async () => {
-        const btn = $('.qa-recapture');
-        const orig = btn.textContent;
-        btn.textContent = 'Capturing…';
-        btn.disabled = true;
-        try {
-          const shot = await opts.onRecapture?.(overlay);
-          if (shot) { shots.push(shot); renderGallery(); }
-        } finally {
-          btn.textContent = orig;
-          btn.disabled = false;
-        }
-      });
+      // Recapture — only present when not disabled (e.g. settings page has no
+      // source DOM element to re-capture against).
+      const recaptureBtn = $('.qa-recapture');
+      if (recaptureBtn) {
+        recaptureBtn.addEventListener('click', async () => {
+          const orig = recaptureBtn.textContent;
+          recaptureBtn.textContent = 'Capturing…';
+          recaptureBtn.disabled = true;
+          try {
+            const shot = await opts.onRecapture?.(overlay);
+            if (shot) { shots.push(shot); renderGallery(); }
+          } finally {
+            recaptureBtn.textContent = orig;
+            recaptureBtn.disabled = false;
+          }
+        });
+      }
 
       // Paste from clipboard (button)
       $('.qa-paste').addEventListener('click', async () => {
@@ -305,7 +308,7 @@
     return rows;
   }
 
-  function renderHtml(issue) {
+  function renderHtml(issue, opts = {}) {
     const sevs   = (self.QA?.SEVERITIES || ['critical','major','minor','info']);
     const types  = (self.QA?.ISSUE_TYPES || ['visual','content','i18n','a11y','interactive','broken']);
     const sevOpts  = sevs.map((s) => `<option value="${s}" ${s===issue.severity?'selected':''}>${s}</option>`).join('');
@@ -409,7 +412,7 @@
             </div>
             <div class="qa-gallery"></div>
             <div class="qa-gallery-actions">
-              <button class="qa-recapture" type="button" title="Capture the current page again">Recapture</button>
+              ${opts.disableRecapture ? '' : '<button class="qa-recapture" type="button" title="Capture the current page again">Recapture</button>'}
               <button class="qa-paste" type="button" title="Paste image from clipboard (Ctrl/Cmd+V)">Paste image</button>
               <button class="qa-upload" type="button" title="Upload image file(s)">Upload…</button>
               <input class="qa-upload-input" type="file" accept="image/*" multiple style="display:none" />

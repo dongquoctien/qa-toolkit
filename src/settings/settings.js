@@ -252,7 +252,211 @@
     await refreshTrees();
   });
 
+  // ============== Saved issues ==============
+  async function refreshIssues() {
+    const issues = await rpc({ type: MSG.ISSUE_LIST }) || [];
+    const tbody = document.querySelector('#issues tbody');
+    tbody.innerHTML = '';
+    if (issues.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="7" class="muted" style="text-align:center;padding:16px">No saved issues yet.</td>';
+      tbody.appendChild(tr);
+      return;
+    }
+    for (const i of issues) {
+      const ctx = i.context || {};
+      const vp = ctx.viewport || {};
+      const bp = ctx.breakpoint || {};
+      const vpStr = vp.w ? `${vp.w}×${vp.h}${bp.label ? ` (${bp.label})` : ''}` : '—';
+      const pageSec = [i.page, i.section].filter(Boolean).join(' · ') || '—';
+      const savedAt = (i.updatedAt || i.createdAt || '').slice(0, 10) || '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><code>${escapeHtml(i.id)}</code></td>
+        <td>${escapeHtml(i.title || '(no title)')}</td>
+        <td><span class="tag">${escapeHtml(i.severity || '—')}</span></td>
+        <td>${escapeHtml(pageSec)}</td>
+        <td><code>${escapeHtml(vpStr)}</code></td>
+        <td>${escapeHtml(savedAt)}</td>
+        <td class="actions">
+          <button data-act="issue-edit" data-id="${escapeAttr(i.id)}">Edit</button>
+          <button data-act="issue-delete" data-id="${escapeAttr(i.id)}" class="danger">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  document.querySelector('#issues').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.getAttribute('data-id');
+    if (btn.dataset.act === 'issue-edit') {
+      const issues = await rpc({ type: MSG.ISSUE_LIST }) || [];
+      const issue = issues.find((x) => x.id === id);
+      if (!issue) { alert('Issue not found.'); return; }
+      const result = await QA.formModal.open(issue, {
+        // No source DOM element here — Recapture would be meaningless.
+        disableRecapture: true,
+        onPasteFromClipboard: async () => {
+          try {
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+              for (const t of item.types) {
+                if (t.startsWith('image/')) {
+                  const blob = await item.getType(t);
+                  const dataUrl = await blobToDataUrl(blob);
+                  return makeShot(issue.id, dataUrl, 'paste');
+                }
+              }
+            }
+          } catch (err) {
+            alert('Could not read clipboard. Browser may need permission, or there is no image.\n\nDetails: ' + (err?.message || err));
+          }
+          return null;
+        },
+        onUploadFile: async (file) => {
+          if (!file || !file.type.startsWith('image/')) return null;
+          const dataUrl = await blobToDataUrl(file);
+          return makeShot(issue.id, dataUrl, 'upload');
+        }
+      });
+      if (result) {
+        await rpc({ type: MSG.ISSUE_SAVE, payload: result });
+        await refreshIssues();
+      }
+    } else if (btn.dataset.act === 'issue-delete') {
+      if (!confirm(`Delete issue ${id}?`)) return;
+      await rpc({ type: MSG.ISSUE_DELETE, payload: id });
+      await refreshIssues();
+    }
+  });
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+
+  function makeShot(id, dataUrl, sourceLabel) {
+    const idx = Date.now() % 100000;
+    return {
+      filename: `${id}-${sourceLabel}-${idx}.png`,
+      relativePath: `screenshots/${id}-${sourceLabel}-${idx}.png`,
+      dataUrl,
+      source: sourceLabel,
+      capturedAt: new Date().toISOString()
+    };
+  }
+
+  // ============== Import report (ZIP or JSON) ==============
+  $('report-import').addEventListener('click', async () => {
+    const file = $('report-file').files?.[0];
+    const setStatus = (txt, ok = true) => {
+      const el = $('report-status');
+      el.textContent = txt;
+      el.style.color = ok ? '' : '#c0392b';
+    };
+
+    if (!file) { setStatus('Choose a .zip or .json file first.', false); return; }
+    setStatus('Importing…');
+
+    try {
+      const result = await importReportFile(file);
+      setStatus(`✓ ${result.imported} imported, ${result.skipped} skipped${result.shotsAttached ? `, ${result.shotsAttached} screenshots` : ''}.`);
+      $('report-file').value = '';
+      await refreshIssues();
+    } catch (e) {
+      setStatus('Failed: ' + (e?.message || e), false);
+    }
+  });
+
+  // Returns { imported, skipped, shotsAttached } and writes via MSG.ISSUE_SAVE.
+  // Skip-duplicates policy: any incoming issue whose ID matches an existing
+  // saved issue is left alone. This is the safest default per spec.
+  async function importReportFile(file) {
+    const isZip = /\.zip$/i.test(file.name) || file.type === 'application/zip';
+    let report;
+    let screenshotsByPath = {}; // path -> dataUrl
+
+    if (isZip) {
+      const entries = await QA.zipStore.parseZip(file);
+      const reportEntry = entries.find((e) => e.path === 'qa-report.json');
+      if (!reportEntry) throw new Error('zip is missing qa-report.json');
+      report = JSON.parse(new TextDecoder('utf-8').decode(reportEntry.data));
+      // Convert each PNG entry into a dataUrl keyed by its path so we can
+      // re-attach to issue.screenshots[].relativePath references.
+      for (const e of entries) {
+        if (!/\.(png|jpe?g|gif|webp)$/i.test(e.path)) continue;
+        const ext = (e.path.split('.').pop() || 'png').toLowerCase();
+        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+                   : ext === 'gif' ? 'image/gif'
+                   : ext === 'webp' ? 'image/webp'
+                   : 'image/png';
+        screenshotsByPath[e.path] = await bytesToDataUrl(e.data, mime);
+      }
+    } else {
+      const text = await file.text();
+      report = JSON.parse(text);
+    }
+
+    if (report?.$schema !== 'qa-report-v1' || !report.report?.issues) {
+      throw new Error(`unexpected report shape (got $schema=${report?.$schema})`);
+    }
+
+    const existing = await rpc({ type: MSG.ISSUE_LIST }) || [];
+    const existingIds = new Set(existing.map((i) => i.id));
+
+    let imported = 0, skipped = 0, shotsAttached = 0;
+    for (const issue of report.report.issues) {
+      if (!issue?.id) { skipped++; continue; }
+      if (existingIds.has(issue.id)) { skipped++; continue; }
+
+      // Re-attach screenshot dataUrls from the ZIP. JSON-only imports keep
+      // whatever the report had (which is usually nothing — exporter strips
+      // dataUrls from MD/JSON-without-zip). Either way we don't fail.
+      const shots = Array.isArray(issue.screenshots) ? issue.screenshots : (issue.screenshot ? [issue.screenshot] : []);
+      const rebuilt = shots.map((s) => {
+        if (!s) return null;
+        if (s.dataUrl) return s;
+        const lookupPath = s.relativePath || s.path || s.filename;
+        if (lookupPath && screenshotsByPath[lookupPath]) {
+          shotsAttached++;
+          return { ...s, dataUrl: screenshotsByPath[lookupPath] };
+        }
+        // Try with screenshots/ prefix or basename fallback
+        const basename = (lookupPath || '').split('/').pop();
+        const guess = basename ? screenshotsByPath[`screenshots/${basename}`] : null;
+        if (guess) { shotsAttached++; return { ...s, dataUrl: guess }; }
+        return s;
+      }).filter(Boolean);
+      issue.screenshots = rebuilt;
+      issue.screenshot = rebuilt[0] || null;
+
+      await rpc({ type: MSG.ISSUE_SAVE, payload: issue });
+      imported++;
+    }
+    return { imported, skipped, shotsAttached };
+  }
+
+  // Convert a Uint8Array of binary image bytes into a data URL.
+  // Uses FileReader so very large PNGs do not blow the call stack the way
+  // String.fromCharCode(...bytes) would.
+  function bytesToDataUrl(bytes, mime) {
+    return new Promise((resolve, reject) => {
+      const blob = new Blob([bytes], { type: mime });
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+
   await loadColor();
   await refresh();
+  await refreshIssues();
   await refreshTrees();
 })();

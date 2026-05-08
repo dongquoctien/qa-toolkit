@@ -92,7 +92,7 @@ When Claude Code runs `/qa:figma-sync`, it reads `plugins/qa-tooling/commands/qa
 | `src/lib/exporter.js` | Builds qa-report-v1 + Markdown + ZIP entries. Aggregates `viewportsTested`. |
 | `src/background/service-worker.js` | Storage owner. **`compressTree` accepts both long-form and short-form keys** — always use `?? short` fallback when reading tree fields. |
 | `src/profile/profile-manager.js` | ESM profile CRUD with seed-on-install of empty profile. |
-| `src/settings/settings.html`+`.js` | Card order: Import → Saved → Figma tree → Theme color (last). |
+| `src/settings/settings.html`+`.js` | Card order: Import → Saved profiles → Saved issues → Figma tree → Theme color. **Loads `content.css` + `form-modal.js`** so the issue-edit modal can render here exactly as it does in-page. |
 | `src/popup/popup.html`+`.js` | 380px wide. JSON/MD/ZIP export buttons on one row. |
 
 ### Plugin
@@ -159,7 +159,15 @@ Uses `color-mix(in srgb, var(--qa-accent) ...%, transparent)` in keyframes. Olde
 ### 10. mcp-atlassian write tools accept Markdown only — never ADF or wiki
 `jira_create_issue` / `jira_update_issue` / `jira_add_comment` run a Markdown→wiki adapter on the body. Passing ADF JSON, raw wiki markup (e.g. `||header||` rows or `!file|thumbnail!` outside a Markdown context), or HTML triggers re-escaping: `!` becomes `\!` (image macro breaks), `*bold*` flips to `_italic_`, `||` headers prepend `||#||` shifting every column. The `qa-sync-jira` skill therefore uses a **bold-key list** for metadata (no `|` anywhere), fenced code blocks for selectors / computed values (where `|` is inert), and the wiki image macro `!filename|thumbnail!` only because it has no Markdown counterpart and passes through verbatim. Screenshots must be uploaded via `jira_update_issue`'s `attachments` parameter (JSON array of absolute paths) so the macro resolves against a real attachment. If the upload step fails, leave the issue created and surface the filename plain-text in the description so a human can drag-and-drop.
 
-### 11. `expectedPerElement` invariants
+### 11. `form-modal.js` runs in TWO contexts
+Originally written for the in-page content script. As of 0.1.5 it is also loaded by `src/settings/settings.html` so users can edit saved issues without re-picking. Two contracts that drop out of this:
+
+- **`opts.disableRecapture`** must be true in settings — there is no source DOM element on the settings page, so the Recapture button would do nothing. The render function omits the button when this flag is set; the click-binding guard (`if (recaptureBtn)`) keeps it safe even if a caller forgets the flag.
+- **Caller owns persistence**. Content script writes to `MSG.ISSUE_SAVE` after `formModal.open()` resolves; settings page does the same. If you add a third caller (e.g. side panel later), do the save yourself — the modal does not call `chrome.runtime.sendMessage`.
+
+The settings page also reuses the in-page CSS by directly linking `content.css`. Keep `.qa-ext-ui.qa-modal-overlay` styles host-page-proof (with `!important` everywhere) so they don't leak/conflict in the options page either.
+
+### 12. `expectedPerElement` invariants
 
 Multi-pick issues carry a sparse override array `expectedPerElement` alongside the shared `expected`. Three rules the modal, exporter, and Jira skill all depend on:
 
