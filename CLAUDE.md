@@ -208,6 +208,26 @@ Blur tool calls `baseCtx.getImageData()` repeatedly to sample pixel colors for p
 
 `axe.min.js` is in `manifest.json#content_scripts.js[]` so Chrome loads it on every matched page. To minimize startup cost, `a11yScan.scan()` first checks `axe.run` exists; the wrapper itself is only called when `settings.sources.a11y === true`. axe rules that need page context (`region`, `landmark-one-main`, `page-has-heading-one`, `document-title`, `html-has-lang`, `bypass`) are explicitly disabled in `runOpts.rules` because subtree-scoped scans can't satisfy them — they'd always report false positives.
 
+### 19. Panel registry contract (v0.3.0)
+
+Each panel module IIFE-registers itself via `QA.panelRegistry.register({ id, title, modes, defaultCollapsed, isAvailable, render, mount, harvest })`. Manifest order matters — `panel-registry.js` MUST be listed BEFORE every panel file in `manifest.json#content_scripts.js[]`, otherwise panels stash on `QA.panels` and registry never picks them up. Panel files are also loaded in `settings.html` so the "Custom mode panels" checkbox grid can list them.
+
+Mode → panels map lives in `panel-registry.js#PANEL_MAP`. Adding a panel to a new mode = edit that constant. Custom mode reads `settings.customPanels[]` (user preset); empty preset means "show every registered panel collapsed".
+
+`form-modal.js` integration: registry mounted via `mountAll(overlay, issue, settings, onChange)` returns a cleanup function that's pushed onto a `cleanups[]` queue. The `finish()` closure runs every cleanup in order before resolving the modal promise — without this queue, panel listeners leak across modal opens.
+
+### 20. Panel-body flex-shrink trap
+
+`.qa-modal-body` is `display: flex; flex-direction: column;` so panels rendered as direct children become flex items. Without `flex-shrink: 0` on `.qa-panel`, the panel content + header collapse to height 0px (the body's `flex-basis: auto` math disagrees with the panel's intrinsic height). The `.qa-row` siblings don't show this because they're tiny — but a panel with multi-row body always tries to grow. Always set `flex-shrink: 0` on direct flex children that contain non-trivial content.
+
+### 21. Panel harvest: mutate vs return
+
+Panels can either mutate the source object (e.g. pin-notes writes `layer.note` in-place on `screenshots[i].annotations.layers[j]`) OR return data that registry stuffs into `issue.panels[panel.id]`. Pin-notes does both: mutates layer + returns a descriptor `{ entries[], count }` so consumers can detect "this issue has pin notes" without walking screenshots. When in doubt, mutate when the data lives on a sibling object the modal already saves; return when the data is panel-specific (form-state-only).
+
+### 22. Exporter panels block — render order matters
+
+`exporter.js#renderPanelsMarkdown` iterates panels in a fixed order: runtime → design → app-state → a11y → i18n → pin-notes. Pin-notes always last because it references screenshots that come after the panels block. Panels with no data return `[]` so the export stays compact when only common fields are filled. The early-skip condition `!panels[id] && id !== 'runtime-context' && id !== 'a11y-findings' && id !== 'pin-notes'` allows those three panels to render even with empty `issue.panels[id]` — they read from `issue.runtimeContext`, `issue.a11yFindings`, and `issue.screenshots` respectively (auto-populated at pick time, not user-edited).
+
 ---
 
 ## Common tasks

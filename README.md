@@ -111,6 +111,18 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ---
 
+## What's new in v0.3.0 (2026-05-08)
+
+- **Mode-aware modal panels** — each QA mode shows the right form fields. No more generic Note + Expected CSS rows for every bug type:
+  - **prod-bug** → Runtime context (numbered repro steps + expected vs actual + auto-attached console + network + browser env)
+  - **design-fidelity** → Mismatch category radio (spacing/color/typography/alignment/asset/other) + Figma reference (auto-matched link + breadcrumb)
+  - **admin** → App state (role/tenant auto-detected from `data-user-role`/`data-tenant-id`, route from URL, modal data-id) + Runtime context
+  - **a11y** → Rich axe-core display: violations with WCAG SC + helpUrl + impact, contrast ratio with swatches, affected user group dropdown, fix suggestion
+  - **i18n** → Locale + direction (auto from `document.dir`) + bug category (truncation/mirroring/hardcoded/plural/format/translation/missing) + source vs rendered string + linguistic vs technical
+- **Pin notes panel** — universal across all modes. Every numbered pin gets a textarea grouped by screenshot. Round-trip lossless with the annotation editor.
+- **Custom mode panels preset** — Settings card lets you pick which panels show in Custom mode (empty = all 6 panels collapsed).
+- **Panel-aware Markdown / ZIP / JSON export** — each panel emits its own block. Pin notes render as bullet list with 📍 emoji. Empty panels skip silently to keep reports compact.
+
 ## What's new in v0.2.0 (2026-05-08)
 
 - **6 QA modes** (PROD bug / Design fidelity / Admin / A11y / i18n / Custom) — picker in Settings auto-toggles capture sources + filters which Settings cards are visible to keep the UI focused per workflow.
@@ -122,7 +134,7 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ## Status
 
-- **Extension** v0.2.0 — Phase 1 + Sprint 1 (mode-aware QA workflow, annotation editor, runtime capture, a11y scan) complete and tested live in Chrome.
+- **Extension** v0.3.0 — Phase 1 + Sprint 1 + Sprint 2 (mode-aware modal panels, all 5 mode-specific panels + universal pin-notes, exporter rendering panels) complete and tested live via chrome-devtools MCP.
 - **Plugin** Phase 1 complete; `/qa:init`, `/qa:doctor`, `/qa:figma-sync` exercised live against about-us; `/qa:sync` spec done but not yet exercised against a real Jira workspace.
 
 Phase 2 (mode-aware modal panels for runtime context / app-state / a11y findings / i18n findings) listed in [`STATUS.md`](STATUS.md#-not-built-phase-2).

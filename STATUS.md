@@ -5,6 +5,63 @@
 
 ---
 
+## ✅ Sprint 2 — v0.3.0 (shipped 2026-05-08)
+
+> User asked: each QA mode needs its own form fields, not the same form for everything. Research showed Linear-style "issue type" pattern hides irrelevant fields. Approach 2 — dynamic panel registry — picked.
+
+### Sprint 2 result — mode-aware modal panels
+
+| # | Task | Files |
+|---|---|---|
+| 2.1 | **Panel registry** — `register/render/mount/harvest` contract. Mode → panels[] map. Custom mode reads `settings.customPanels[]`. Click-to-collapse panel headers. Cleanup queue in form-modal lifecycle. | `src/core/panel-registry.js` (~180 LOC), `form-modal.js` (mount + harvest hook + cleanups[]) |
+| 2.2 | **Pin notes panel** (universal) — list every numbered pin per screenshot, textarea per pin, mutates `screenshots[i].annotations.layers[j].note` on save. Round-trip lossless with annotation-editor. | `src/core/panels/pin-notes.js` (~140 LOC) |
+| 2.3 | **Runtime context panel** (prod-bug + admin) — repro steps numbered list (add/remove/renumber), expected vs actual textareas. Auto-displays console + network + env from Sprint 1 buffer. | `src/core/panels/runtime-context.js` (~210 LOC) |
+| 2.4 | **Design fidelity panel** (design-fidelity) — mismatch category 6-radio (spacing/color/typography/alignment/asset/other), Figma link auto-matched, breadcrumb, breakpoint, implementation notes. | `src/core/panels/design-fidelity.js` (~120 LOC) |
+| 2.5 | **App state panel** (admin) — auto-detects role/tenant from `data-user-role` / `data-tenant-id` attrs (configurable via `settings.appStateSelectors`). Manual: action attempted, form payload (JSON paste). Auto: route, open modal, table state. | `src/core/panels/app-state.js` (~140 LOC) |
+| 2.6 | **A11y findings panel** (a11y) — rich axe display: violations list with WCAG SC + helpUrl + impact badge + selector. Contrast row with swatches + ratio + pass/fail. User edits: rule selection, affected user group (7 options), fix suggestion. | `src/core/panels/a11y-findings.js` (~160 LOC) |
+| 2.7 | **i18n findings panel** (i18n) — auto-detect locale (from context) + direction (from document.dir) + i18n key (from element). Manual: bug category (8 types: truncation/mirroring/hardcoded/plural/format/translation/missing), source string, rendered string, linguistic vs technical, notes. | `src/core/panels/i18n-findings.js` (~140 LOC) |
+| 2.8 | **Exporter + Jira sync update** — `renderPanelsMarkdown` block per issue. Each panel has its own MD renderer that skips silently when empty. Settings card "Custom mode panels" with checkbox grid for user preset. | `src/lib/exporter.js` (+~140 LOC), `settings.html`, `settings.js`, `settings.css` |
+| 2.9 | **Docs + release** — bump 0.2.0 → 0.3.0, STATUS / CLAUDE / README updated, tag v0.3.0 | docs + manifest |
+
+### Mode → panels mapping
+
+| Mode | Panels (in render order) |
+|---|---|
+| `prod-bug` | runtime-context · pin-notes |
+| `design-fidelity` | design-fidelity · pin-notes |
+| `admin` | runtime-context · app-state · pin-notes |
+| `a11y` | a11y-findings · pin-notes |
+| `i18n` | i18n-findings · pin-notes |
+| `custom` | user picks via Settings → "Custom mode panels" checkboxes (empty = all) |
+
+### Schema additions (issue model)
+
+```js
+issue.panels = {
+  'runtime-context': { reproSteps[], expected, actual },
+  'design-fidelity': { mismatchCategory, notes },
+  'app-state':       { role, tenantId, actionAttempted, formPayload, auto: { route, openModal, tableState } },
+  'a11y-findings':   { selectedRule, affectedUserGroup, fixSuggestion },
+  'i18n-findings':   { locale, direction, i18nKey, bugCategory, sourceString, renderedString, linguisticOrTechnical, notes },
+  'pin-notes':       { entries: [{ shotIdx, n, note }], count }
+}
+```
+
+Empty panel data is skipped on serialize; old issues without `panels` still load (panels object is optional).
+
+### Verified live via chrome-devtools MCP
+
+- ✅ Each mode loads only the right panels (prod-bug=2, admin=3, a11y=2, i18n=2)
+- ✅ Auto-detection: role/tenant from body attrs, route from location, locale from context, direction from document.dir, i18n key from element
+- ✅ Click panel header → collapse/expand (chevron rotates)
+- ✅ Custom mode reads `settings.customPanels[]`; empty = show all
+- ✅ Round-trip: pin notes save mutates `layer.note`, reload restores
+- ✅ Runtime context: add/remove step renumbers correctly
+- ✅ Markdown export renders all 6 panels in order with proper formatting
+- ✅ Settings page "Custom mode panels" grid renders 6 panels with mode chips
+
+---
+
 ## ✅ Sprint 1 — v0.2.0 (shipped 2026-05-08)
 
 > The user's ask was: extension currently only catches CSS/computed mismatches; grow it into a real QA workhorse covering frontend AND admin systems. Specifically: numbered/annotated screenshots ("chụp ảnh đánh số và chú thích"), bug area + fix area markup ("phần lỗi, phần nên sửa"), and works without Figma (PROD bugs, admin systems).
