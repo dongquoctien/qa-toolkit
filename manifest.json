@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "QA Annotator",
   "short_name": "QA Annotator",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Click any element on any website to log QA/QC issues. Project-aware via Profiles. Exports JSON/Markdown/ZIP for Claude + Jira sync.",
 
   "minimum_chrome_version": "114",
@@ -68,6 +68,7 @@
         "src/adapters/adapter-registry.js",
         "src/core/issue-builder.js",
         "src/core/inspector.js",
+        "src/core/region-selector.js",
         "src/core/annotation-editor.js",
         "src/core/form-config.js",
         "src/core/panel-registry.js",

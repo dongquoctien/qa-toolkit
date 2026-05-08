@@ -147,6 +147,77 @@
     };
   }
 
+  // Build a "blank" issue — for the manual-capture flow where the user picks
+  // a screen region instead of a DOM element. There's no element / computed /
+  // selector / source to record. Title / severity / type / context still get
+  // sensible defaults so the modal renders cleanly.
+  function buildBlank(ctx) {
+    const { profile, settings, screenshot, existingIds } = ctx;
+    const id = QA.idGen.nextId(existingIds);
+    const url = location.href;
+    const locale = QA.localeDetector.detectLocale(url, profile.localeStrategy);
+    const page = QA.localeDetector.detectPage(url, profile.pageDetection);
+    const env = QA.viewportDetector.snapshot();
+
+    const sd = settings?.defaults || {};
+    const seededTitle = expandTemplate(sd.titleTemplate || '', {
+      section: '', page: page || '', viewport: env.viewport ? `${env.viewport.w}×${env.viewport.h}` : '',
+      breakpoint: env.breakpoint?.label || '', tag: '', element: '', i18nKey: '', url: location.pathname || ''
+    });
+    const autoTags = computeAutoTags(sd.autoTagRules, location.href);
+    const seededSeverity = sd.severity || profile.issueTemplates?.defaultSeverity || 'minor';
+    const seededType     = sd.type     || profile.issueTemplates?.defaultType     || 'visual';
+
+    return {
+      id,
+      profileId: profile.id,
+      severity: seededSeverity,
+      type: seededType,
+      title: seededTitle,
+      tags: autoTags,
+      page,
+      section: null,
+      component: null,
+
+      // No element — manual capture has no DOM ref. Modal handles null/empty
+      // by skipping element + computed rows (form-config fieldVisible decides).
+      element: null,
+      elements: [],
+
+      source: { file: null, line: null, column: null, adapter: 'manual' },
+      computed: {},
+      computedPerElement: [],
+      computedAllIdentical: false,
+
+      expected: {},
+      expectedPerElement: undefined,
+      actual: {},
+      delta: {},
+
+      screenshot: screenshot || null,
+      screenshots: screenshot ? [screenshot] : [],
+      note: '',
+
+      context: {
+        url,
+        locale,
+        viewport: env.viewport,
+        document: env.document,
+        breakpoint: env.breakpoint,
+        device: env.device,
+        viewportLabel: QA.viewportDetector.formatChip(env)
+      },
+
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      synced: null,
+
+      // Manual-only marker so reports and Jira sync know this issue has no
+      // source mapping — they should suppress the "Selector / Source" row.
+      isManual: true
+    };
+  }
+
   function describeElement(el, dataAttrs) {
     const rect = el.getBoundingClientRect();
     return {
@@ -202,5 +273,5 @@
 
   const target = (typeof self !== 'undefined' ? self : window);
   target.QA = target.QA || {};
-  target.QA.issueBuilder = { buildPartial };
+  target.QA.issueBuilder = { buildPartial, buildBlank };
 })();

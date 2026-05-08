@@ -5,6 +5,50 @@
 
 ---
 
+## ✅ Sprint 4 — v0.5.0 (shipped 2026-05-09)
+
+> User asked: add a manual capture flow — drag a custom region instead of auto-crop around a picked element. Two entry points: popup "Quick capture" icon + modal "New screenshot" button.
+
+### Sprint 4 result — manual region capture
+
+| # | Task | Files |
+|---|---|---|
+| 4.1 | **region-selector.js** — full-screen drag overlay. 4-way cutout backdrop, accent border with corner handles, dimension label, Capture/Cancel buttons under selection, Esc/Enter shortcuts. Min 8×8 threshold (treat smaller as click). Returns `{x,y,w,h}` viewport rect. | `src/core/region-selector.js` (~190 LOC) |
+| 4.2 | **content.js manualRegionCapture pipeline** — hide overlay → region pick → captureVisibleTab → cropAndAnnotate(annotate=false) → annotation editor → return shot. Handler `MANUAL_CAPTURE_START` for popup-triggered flow. | `content.js` (+~120 LOC), `lib/messages.js` |
+| 4.3 | **issue-builder.buildBlank** — manual-only issue with no element/computed/source. Marks `isManual: true`. Modal handles missing element gracefully (skips Element + Computed rows). | `issue-builder.js` (+~70 LOC) |
+| 4.4 | **Form modal — New screenshot button + rename Recapture** — added `qa-new-shot` button next to Recapture. Renamed Recapture → "Recapture (auto)" so user knows the difference. Element row hides when `hasElements === false`. | `form-modal.js` |
+| 4.5 | **Popup — Quick capture icon** — crop SVG icon button next to Start Inspector. Click → message content script → window.close(). | `popup.html/js/css` |
+| 4.6 | **Test live qua MCP** — region drag pixel-perfect, Capture / Cancel / Esc / min-size all work. Full flow region → editor verified. | — |
+| 4.7 | **Docs + release v0.5.0** | docs + manifest |
+
+### Two entry points
+
+| Trigger | Use case | Issue model |
+|---|---|---|
+| Popup "Quick capture" icon | Bug không liên quan element cụ thể (vd graph mismatch, icon misalign across multiple elements) | `buildBlank()` → manual-only issue, no element/computed |
+| Modal "New screenshot" button | Đã có issue đang fill, muốn capture thêm region khác | Push thêm shot vào `issue.screenshots[]` |
+
+### UX details
+
+- **Backdrop**: 30% black dim toàn viewport, **clear** trong selection rect
+- **Selection**: pink 2px border, 4 white-pink corner handles, dim label "300 × 200" pink badge top-left
+- **Buttons**: floating "Cancel" + "Capture" (pink primary) ngay dưới selection
+- **Banner**: "Drag to select an area · Esc cancel · Enter capture" — fade dim after 3s
+- **Min size**: drag <8×8 → treat as click, reset to idle
+- **Out-of-bounds**: button position auto-flips above selection if too close to viewport bottom
+
+### Verified live via MCP
+
+- ✅ Region overlay opens with backdrop + banner
+- ✅ Drag rectangle 100,100 → 400,300 → box visible 300×200, dim label correct
+- ✅ Capture button click → returns rect, overlay closes
+- ✅ Esc cancels, returns null
+- ✅ Min-size 5×5 drag → treat as click, reset (no false rect)
+- ✅ Full flow: region → cropped image → annotation editor opens with 6 tools
+- ✅ Popup: Start Inspector flex:1 + Quick capture icon button bên phải
+
+---
+
 ## ✅ Sprint 3 — v0.4.0 (shipped 2026-05-08)
 
 > User asked: per-mode form builder so each QA mode has its own visible/required fields. Research showed Linear/Jira/Notion patterns — landed on Notion-style table + Jira 3-state pill, scoped by mode tabs.

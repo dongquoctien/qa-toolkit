@@ -111,6 +111,15 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ---
 
+## What's new in v0.5.0 (2026-05-09)
+
+- **Manual region capture** — drag a custom rectangle on the page instead of auto-cropping around a picked element. Two entry points:
+  - **Popup → Quick capture** (crop icon next to Start Inspector): drag region → annotate → blank issue modal opens. No element pick needed.
+  - **Modal → New screenshot**: while filling an issue, drag a region to add a screenshot of any other area.
+- **Recapture button renamed to "Recapture (auto)"** to clarify it re-grabs the page using the picked element's selectors. Manual region drag is the new "New screenshot" button.
+- Region selector UX: drag with crosshair, 4-corner handles, live dimension label, Cancel / Capture buttons under the selection, Esc to cancel, Enter to commit.
+- Manual issue: blank issue with `isManual: true` marker, no element/computed/selector — modal cleanly hides those rows.
+
 ## What's new in v0.4.0 (2026-05-08)
 
 - **Form builder per QA mode** — Settings → "QA issue form per mode" card lets you configure which fields and panels appear in the issue modal for each mode, and which are required before save.
