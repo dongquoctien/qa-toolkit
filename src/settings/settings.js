@@ -794,7 +794,52 @@
     applySettingsToFields(settings);
     markActiveMode(settings?.mode);
     applyModeVisibility(settings?.mode || 'custom');
+    refreshCustomPanelsGrid();
   }
+
+  // ============== Custom mode panels grid ==============
+  // Panel registry is loaded as a script in settings.html; if present, render
+  // a checkbox grid so users can pick which panels show in Custom mode. Empty
+  // selection means "show every registered panel".
+  function refreshCustomPanelsGrid() {
+    const grid = document.getElementById('custom-panels-grid');
+    if (!grid) return;
+    const reg = self.QA?.panelRegistry;
+    if (!reg?.listPanelIds) {
+      grid.innerHTML = '<p class="muted">Panel registry not loaded on settings page.</p>';
+      return;
+    }
+    const panels = reg.listPanelIds();
+    if (!panels.length) {
+      grid.innerHTML = '<p class="muted">No panels registered yet.</p>';
+      return;
+    }
+    const enabled = new Set(_liveSettings?.customPanels || []);
+    grid.innerHTML = panels.map((p) => {
+      const checked = enabled.has(p.id) ? 'checked' : '';
+      const modeChips = (p.modes || []).map((m) => `<span class="tag">${escapeHtml(m)}</span>`).join(' ');
+      return `
+        <label class="custom-panel-row">
+          <input type="checkbox" class="custom-panel-toggle" value="${escapeAttr(p.id)}" ${checked} />
+          <div class="custom-panel-body">
+            <strong>${escapeHtml(p.title)}</strong>
+            <small>id: <code>${escapeHtml(p.id)}</code> · default in: ${modeChips || '—'}</small>
+          </div>
+        </label>
+      `;
+    }).join('');
+  }
+
+  // Persist toggle changes (delegated, no need to re-bind on refresh).
+  document.addEventListener('change', async (e) => {
+    const cb = e.target.closest && e.target.closest('input.custom-panel-toggle');
+    if (!cb) return;
+    const grid = document.getElementById('custom-panels-grid');
+    if (!grid) return;
+    const ids = [...grid.querySelectorAll('input.custom-panel-toggle:checked')].map((c) => c.value);
+    const r = await rpc({ type: MSG.SETTING_SET, payload: { customPanels: ids } });
+    if (r?.settings) _liveSettings = r.settings;
+  });
 
   bindFieldHandlers();
   bindModePicker();

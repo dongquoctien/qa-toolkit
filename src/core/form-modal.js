@@ -55,7 +55,11 @@
         activeTab: 'all'   // 'all' | 0 | 1 | 2 ...
       };
 
+      // Cleanup queue — modules (panels, custom listeners) can push their own
+      // teardown function so finish() runs them all in order before resolve.
+      const cleanups = [];
       const finish = (result) => {
+        for (const fn of cleanups) { try { fn(); } catch {} }
         overlay.remove();
         document.removeEventListener('keydown', onKey, true);
         overlay.removeEventListener('paste', onPaste);
@@ -122,7 +126,7 @@
           if (first && first.focus) first.focus();
           return;
         }
-        finish(harvest(overlay, issue, shots, expectedModel));
+        finish(harvest(overlay, issue, shots, expectedModel, opts));
       });
 
       // Computed tabs (only present when multi-pick + values differ)
@@ -308,6 +312,14 @@
       $('.qa-upload').addEventListener('click', () => $('.qa-upload-input').click());
 
       renderGallery();
+
+      // Mount mode-aware panels. Registry is optional — modal still renders
+      // without it (the inline fallback in renderPanelsBlock fires).
+      if (self.QA?.panelRegistry?.mountAll) {
+        const panelsCleanup = self.QA.panelRegistry.mountAll(overlay, issue, opts?.settings || {}, () => { /* onChange — future use */ });
+        if (typeof panelsCleanup === 'function') cleanups.push(panelsCleanup);
+      }
+
       setTimeout(() => $('.qa-title')?.focus(), 0);
     });
   }
@@ -347,7 +359,7 @@
     listEl.appendChild(row);
   }
 
-  function harvest(root, issue, shots, expectedModel) {
+  function harvest(root, issue, shots, expectedModel, opts) {
     const $ = (sel) => root.querySelector(sel);
     const get = (sel) => $(sel)?.value ?? '';
     const out = { ...issue };
@@ -358,6 +370,17 @@
     // tags array is preserved as-is from issue (set at build by auto-tag rules);
     // future: a chip-input UI in the modal will let users add/remove tags here.
     if (!Array.isArray(out.tags)) out.tags = [];
+
+    // Harvest panel data (mode-aware). Existing panels (e.g. inherited from a
+    // saved issue from a different mode) are preserved — registry only writes
+    // back panels visible in the current mode.
+    if (self.QA?.panelRegistry?.harvestAll) {
+      try {
+        out.panels = self.QA.panelRegistry.harvestAll(root, issue, opts?.settings || {});
+      } catch (e) {
+        console.warn('[QA] panel harvest failed', e);
+      }
+    }
 
     // Build shared expected from model.sharedRows + figma fields.
     const expected = {};
@@ -542,8 +565,7 @@
             <textarea class="qa-note" rows="3" placeholder="Free-text context (paste images here too)"></textarea>
           </div>
 
-          ${renderRuntimeContext(issue)}
-          ${renderA11yFindings(issue)}
+          ${renderPanelsBlock(issue, opts)}
 
           <div class="qa-row">
             <div class="qa-label-row">
@@ -569,6 +591,21 @@
   }
 
   // Compact display block for the runtime buffer snapshot — shown only when
+  // Panel registry block — replaces the static renderRuntimeContext +
+  // renderA11yFindings shown in v0.2.0. The registry decides which panels
+  // mount based on settings.mode (or settings.customPanels[] in custom mode).
+  // Each panel module owns its own render/mount/harvest lifecycle.
+  //
+  // Backward-compat: if QA.panelRegistry hasn't loaded yet (manifest order
+  // changed by accident), fall back to the inline renderers so the modal
+  // never shows a blank space.
+  function renderPanelsBlock(issue, opts) {
+    if (self.QA?.panelRegistry?.renderPanels) {
+      return self.QA.panelRegistry.renderPanels(issue, opts?.settings || {});
+    }
+    return renderRuntimeContext(issue) + renderA11yFindings(issue);
+  }
+
   // console / network capture was on at pick time and the buffer had entries.
   // Each list collapses to "+N more" past 3 to keep the modal readable.
   function renderRuntimeContext(issue) {

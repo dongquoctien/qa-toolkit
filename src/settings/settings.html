@@ -440,6 +440,14 @@
     <p id="color-status" class="muted"></p>
   </section>
 
+  <section class="card" data-modes="custom">
+    <h2>Custom mode panels</h2>
+    <p>When QA mode is set to <strong>Custom</strong>, the modal shows the panels you tick here. Leave empty to show every registered panel.</p>
+    <div id="custom-panels-grid" class="custom-panels-grid">
+      <p class="muted">Loading panel registry — open the in-page modal once to populate.</p>
+    </div>
+  </section>
+
   <section class="card" id="advanced-card">
     <h2>Advanced</h2>
     <div class="row">
@@ -459,6 +467,13 @@
   <script src="../lib/zip-store.js"></script>
   <script src="../profile/profile-validator.js"></script>
   <script src="../core/annotation-editor.js"></script>
+  <script src="../core/panel-registry.js"></script>
+  <script src="../core/panels/pin-notes.js"></script>
+  <script src="../core/panels/runtime-context.js"></script>
+  <script src="../core/panels/design-fidelity.js"></script>
+  <script src="../core/panels/app-state.js"></script>
+  <script src="../core/panels/a11y-findings.js"></script>
+  <script src="../core/panels/i18n-findings.js"></script>
   <script src="../core/form-modal.js"></script>
   <script src="settings.js"></script>
 </body>
