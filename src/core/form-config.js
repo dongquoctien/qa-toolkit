@@ -18,6 +18,8 @@
     { id: 'title',       label: 'Title',                always: true },     // always visible — core
     { id: 'severity',    label: 'Severity',             always: true },
     { id: 'type',        label: 'Issue type' },
+    { id: 'element',     label: 'Element selector(s)' },                    // picked element list
+    { id: 'computed',    label: 'Computed (actual) CSS' },                  // browser-read CSS values
     { id: 'note',        label: 'Note (free text)' },
     { id: 'expectedCss', label: 'Expected CSS rows' },
     { id: 'figmaLink',   label: 'Figma link' },
@@ -67,6 +69,7 @@
     'prod-bug': {
       fields: {
         title: 'required',  severity: 'required',  type: 'optional',
+        element: 'optional', computed: 'optional',
         note: 'optional',   expectedCss: 'hidden', figmaLink: 'hidden',
         screenshots: 'optional'
       },
@@ -78,6 +81,7 @@
     'design-fidelity': {
       fields: {
         title: 'required',  severity: 'optional', type: 'optional',
+        element: 'optional', computed: 'optional',
         note: 'optional',   expectedCss: 'optional', figmaLink: 'optional',
         screenshots: 'required'
       },
@@ -89,6 +93,7 @@
     'admin': {
       fields: {
         title: 'required',  severity: 'required',  type: 'optional',
+        element: 'optional', computed: 'optional',
         note: 'optional',   expectedCss: 'hidden', figmaLink: 'hidden',
         screenshots: 'optional'
       },
@@ -101,6 +106,7 @@
     'a11y': {
       fields: {
         title: 'required',  severity: 'required',  type: 'optional',
+        element: 'optional', computed: 'optional',
         note: 'optional',   expectedCss: 'hidden', figmaLink: 'hidden',
         screenshots: 'optional'
       },
@@ -112,6 +118,7 @@
     'i18n': {
       fields: {
         title: 'required',  severity: 'optional',  type: 'optional',
+        element: 'optional', computed: 'optional',
         note: 'optional',   expectedCss: 'hidden', figmaLink: 'hidden',
         screenshots: 'optional'
       },
@@ -124,6 +131,7 @@
       // Custom mode is fully user-driven. Default = everything visible & optional.
       fields: {
         title: 'required',  severity: 'required',  type: 'optional',
+        element: 'optional', computed: 'optional',
         note: 'optional',   expectedCss: 'optional', figmaLink: 'optional',
         screenshots: 'optional'
       },
