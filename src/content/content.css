@@ -534,7 +534,7 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
 
 .qa-ext-ui .qa-gallery {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
   gap: 8px !important;
 }
 .qa-ext-ui .qa-gallery-empty {
