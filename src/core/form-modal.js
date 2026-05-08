@@ -292,6 +292,24 @@
         });
       }
 
+      // New screenshot — manual region drag + annotate.
+      const newShotBtn = $('.qa-new-shot');
+      if (newShotBtn) {
+        newShotBtn.addEventListener('click', async () => {
+          if (!opts.onNewScreenshot) return;
+          const orig = newShotBtn.textContent;
+          newShotBtn.textContent = 'Selecting…';
+          newShotBtn.disabled = true;
+          try {
+            const shot = await opts.onNewScreenshot(overlay);
+            if (shot) { shots.push(shot); renderGallery(); }
+          } finally {
+            newShotBtn.textContent = orig;
+            newShotBtn.disabled = false;
+          }
+        });
+      }
+
       // Paste from clipboard (button)
       $('.qa-paste').addEventListener('click', async () => {
         const shot = await opts.onPasteFromClipboard?.();
@@ -531,15 +549,18 @@
     const sevOpts  = sevs.map((s) => `<option value="${s}" ${s===issue.severity?'selected':''}>${s}</option>`).join('');
     const typeOpts = types.map((t) => `<option value="${t}" ${t===issue.type?'selected':''}>${t}</option>`).join('');
 
-    const elements = issue.elements && issue.elements.length > 1 ? issue.elements : [issue.element];
+    // Manual-only issues have no element refs — skip element list entirely.
+    const rawElements = issue.elements && issue.elements.length > 1 ? issue.elements : [issue.element];
+    const elements = rawElements.filter(Boolean);
     const isMulti = elements.length > 1;
     const perEl = Array.isArray(issue.computedPerElement) ? issue.computedPerElement : null;
     const showSelectable = isMulti && perEl && perEl.length === elements.length && !issue.computedAllIdentical;
     const elementsList = elements.map((el, i) => `
       <li class="qa-element-row${showSelectable ? ' qa-selectable' : ''}${showSelectable && i === 0 ? ' is-active' : ''}" data-idx="${i}"${showSelectable ? ' tabindex="0" role="button" aria-label="Show computed values for element ' + (i + 1) + '"' : ''}>
-        <span class="qa-num">${i + 1}</span><code class="qa-code-inline">${escape(el.selector)}</code>
+        <span class="qa-num">${i + 1}</span><code class="qa-code-inline">${escape(el.selector || '(no selector)')}</code>
       </li>
     `).join('');
+    const hasElements = elements.length > 0;
 
     const sectionLabel = issue.section ? `⌗ ${issue.section}` : '—';
     const src = issue.source;
@@ -614,13 +635,13 @@
             </div>` : ''}
           </div>` : ''}
 
-          ${fieldVisible(formCfg, 'element') ? `
+          ${fieldVisible(formCfg, 'element') && hasElements ? `
           <div class="qa-row">
             <label>${elements.length > 1 ? `Elements (${elements.length})` : 'Element'}${fieldRequired(formCfg, 'element') ? ' <span class="qa-req">*</span>' : ''}</label>
             <ul class="qa-elements-list">${elementsList}</ul>
           </div>` : ''}
 
-          ${fieldVisible(formCfg, 'computed') ? `
+          ${fieldVisible(formCfg, 'computed') && hasElements ? `
           <div class="qa-row">
             <label>Computed (actual)${fieldRequired(formCfg, 'computed') ? ' <span class="qa-req">*</span>' : ''}</label>
             ${renderComputedBlock(issue, elements)}
@@ -667,7 +688,8 @@
             </div>
             <div class="qa-gallery"></div>
             <div class="qa-gallery-actions">
-              ${opts.disableRecapture ? '' : '<button class="qa-recapture" type="button" title="Capture the current page again">Recapture</button>'}
+              ${opts.disableRecapture ? '' : '<button class="qa-recapture" type="button" title="Re-capture the page using the picked element selectors (auto-crop)">Recapture (auto)</button>'}
+              <button class="qa-new-shot" type="button" title="Drag to select a custom region of the page, then annotate">New screenshot</button>
               <button class="qa-paste" type="button" title="Paste image from clipboard (Ctrl/Cmd+V)">Paste image</button>
               <button class="qa-upload" type="button" title="Upload image file(s)">Upload…</button>
               <input class="qa-upload-input" type="file" accept="image/*" multiple style="display:none" />

@@ -240,6 +240,138 @@
     return shot;
   }
 
+  // Manual region capture — user drags a rectangle, we capture the viewport
+  // and crop to that rect. Returns a shot or null if cancelled.
+  // hideEl is an optional element to hide while capturing (modal overlay,
+  // popup-trigger leaves no element to hide).
+  async function manualRegionCapture(issueId, hideEl) {
+    if (!QA.regionSelector) {
+      console.warn('[QA] regionSelector module missing');
+      return null;
+    }
+    // Hide caller's UI so the page is clean for the drag selector.
+    let priorDisplay = '';
+    let priorVisibility = '';
+    if (hideEl) {
+      priorDisplay = hideEl.style.getPropertyValue('display');
+      priorVisibility = hideEl.style.getPropertyValue('visibility');
+      hideEl.style.setProperty('display', 'none', 'important');
+      hideEl.style.setProperty('visibility', 'hidden', 'important');
+    }
+    QA.overlay?.hide();
+    await nextPaint();
+
+    let rect = null;
+    try {
+      rect = await QA.regionSelector.pick();
+    } finally {
+      // Restore caller UI.
+      if (hideEl) {
+        if (priorDisplay) hideEl.style.setProperty('display', priorDisplay);
+        else hideEl.style.removeProperty('display');
+        if (priorVisibility) hideEl.style.setProperty('visibility', priorVisibility);
+        else hideEl.style.removeProperty('visibility');
+      }
+    }
+    if (!rect) return null;
+
+    // Capture the viewport, crop to the rect (no annotate — user draws their
+    // own pins/marks in the annotation editor next).
+    const r = await rpc({ type: MSG.CAPTURE_VISIBLE });
+    if (!r || r.error || !r.dataUrl) {
+      console.warn('[QA] capture failed', r?.error);
+      return null;
+    }
+    const cropped = await QA.screenshot.cropAndAnnotate(r.dataUrl, [rect], { annotate: false });
+    let shot = makeShot(issueId || 'ISS-X', cropped, 'manual');
+
+    // Open annotation editor so user can pin / draw.
+    if (shot && QA.annotationEditor) {
+      const annotated = await QA.annotationEditor.open({
+        dataUrl: shot.dataUrl,
+        settings: liveSettings,
+        severity: undefined
+      });
+      if (annotated) {
+        shot.dataUrl = annotated.dataUrl;
+        shot.annotations = annotated.annotations;
+        shot.source = 'manual-annotated';
+      }
+    }
+    return shot;
+  }
+
+  // Popup-triggered manual capture: no existing modal, no picked element.
+  // After capture, build a blank issue and open the modal.
+  async function startBlankManualCapture() {
+    if (!activeProfile) {
+      activeProfile = await rpc({ type: MSG.PROFILE_GET_ACTIVE });
+    }
+    if (!activeProfile) {
+      alert('QA Annotator: no active profile. Open Settings → Import a profile.');
+      return;
+    }
+    QA.overlay.show();      // briefly so user sees the toolbar dim — optional
+    QA.overlay.hide();
+    await nextPaint();
+
+    const shot = await manualRegionCapture(null, null);
+    if (!shot) return;       // cancelled
+
+    const partial = QA.issueBuilder.buildBlank({
+      profile: activeProfile,
+      existingIds: issues.map((i) => i.id),
+      screenshot: shot,
+      settings: liveSettings
+    });
+    partial.screenshots = [shot];
+    partial.screenshot = shot;
+
+    const result = await QA.formModal.open(partial, {
+      settings: liveSettings,
+      disableRecapture: true,         // no DOM element to recapture against
+      onNewScreenshot: (overlayEl) => manualRegionCapture(partial.id, overlayEl),
+      onPasteFromClipboard: pasteHandler(partial),
+      onUploadFile: uploadHandler(partial)
+    });
+    if (result) {
+      result.screenshot = result.screenshots?.[0] || null;
+      await rpc({ type: MSG.ISSUE_SAVE, payload: result });
+      issues.push(result);
+      QA.overlay.setCount(issues.length);
+    }
+  }
+
+  // Shared paste/upload factories so both startInspector and startBlankManualCapture reuse logic.
+  function pasteHandler(partial) {
+    return async () => {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          for (const t of item.types) {
+            if (t.startsWith('image/')) {
+              const blob = await item.getType(t);
+              const dataUrl = await blobToDataUrl(blob);
+              const shot = makeShot(partial.id, { dataUrl, crop: null }, 'paste');
+              return await maybeAnnotate(shot, partial.severity);
+            }
+          }
+        }
+      } catch (e) {
+        alert('Could not read clipboard.\n\nDetails: ' + (e?.message || e));
+      }
+      return null;
+    };
+  }
+  function uploadHandler(partial) {
+    return async (file) => {
+      if (!file || !file.type.startsWith('image/')) return null;
+      const dataUrl = await blobToDataUrl(file);
+      const shot = makeShot(partial.id, { dataUrl, crop: null }, 'upload');
+      return await maybeAnnotate(shot, partial.severity);
+    };
+  }
+
   async function recaptureWithLiveDom(partial, overlayEl) {
     const spec = partial.elements || [partial.element];
     const live = spec.map((e) => {
@@ -403,6 +535,7 @@
     const result = await QA.formModal.open(partial, {
       settings: liveSettings,
       onRecapture: (overlayEl) => recaptureWithLiveDom(partial, overlayEl),
+      onNewScreenshot: (overlayEl) => manualRegionCapture(partial.id, overlayEl),
       // Paste from clipboard image (returns one shot or null).
       onPasteFromClipboard: async () => {
         try {
@@ -457,6 +590,13 @@
             if (QA.inspector.isActive()) stopInspector();
             else await startInspector();
             sendResponse({ active: QA.inspector.isActive() });
+            return;
+          }
+          case MSG.MANUAL_CAPTURE_START: {
+            // Popup or background asked us to start a blank manual capture.
+            // Reply early so the popup can close, then run the flow.
+            sendResponse({ ok: true });
+            startBlankManualCapture().catch((e) => console.warn('[QA] manual capture failed', e));
             return;
           }
           case MSG.INSPECTOR_STATE: {

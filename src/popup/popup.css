@@ -60,9 +60,15 @@ select:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--qa-accent) 15%, transparent);
 }
 
-.row-toggle { padding-top: 4px; padding-bottom: 4px; }
+.row-toggle {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.row-toggle .primary { flex: 1; }
 button.primary {
-  width: 100%;
   background: var(--qa-accent); color: #fff; border: 0;
   padding: 10px; border-radius: 6px;
   font-weight: 600; font-size: 14px;
@@ -70,6 +76,24 @@ button.primary {
   transition: background 100ms ease;
 }
 button.primary:hover { background: var(--qa-accent-hover); }
+button.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: var(--qa-accent);
+  cursor: pointer;
+  transition: border-color 80ms ease, color 80ms ease, background 80ms ease;
+}
+button.icon-btn:hover {
+  border-color: var(--qa-accent);
+  background: color-mix(in srgb, var(--qa-accent) 6%, #fff);
+  color: var(--qa-accent-hover);
+}
+button.icon-btn svg { display: block; }
 
 .row-stats {
   justify-content: space-between;

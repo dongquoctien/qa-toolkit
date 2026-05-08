@@ -726,6 +726,102 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
 .qa-ext-ui.qa-bar .qa-bar-done:hover { background: var(--qa-accent-hover) !important; }
 .qa-ext-ui.qa-bar .qa-bar-done.qa-hidden { display: none !important; }
 
+/* ============== REGION SELECTOR (manual capture) ============== */
+.qa-ext-ui.qa-region-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  cursor: crosshair !important;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-backdrop {
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-cutout {
+  position: absolute !important;
+  background: rgba(15, 23, 42, 0.45) !important;
+  pointer-events: none !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-box {
+  position: absolute !important;
+  border: 2px solid var(--qa-accent) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) !important;
+  display: none;
+  pointer-events: none !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-dims {
+  position: absolute !important;
+  top: 4px !important;
+  left: 4px !important;
+  padding: 2px 6px !important;
+  font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  color: #fff !important;
+  background: var(--qa-accent) !important;
+  border-radius: 3px !important;
+  pointer-events: none !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-handle {
+  position: absolute !important;
+  width: 8px !important;
+  height: 8px !important;
+  background: #fff !important;
+  border: 2px solid var(--qa-accent) !important;
+  border-radius: 1px !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-handle-nw { top: -5px !important; left: -5px !important; }
+.qa-ext-ui.qa-region-overlay .qa-region-handle-ne { top: -5px !important; right: -5px !important; }
+.qa-ext-ui.qa-region-overlay .qa-region-handle-sw { bottom: -5px !important; left: -5px !important; }
+.qa-ext-ui.qa-region-overlay .qa-region-handle-se { bottom: -5px !important; right: -5px !important; }
+.qa-ext-ui.qa-region-overlay .qa-region-actions {
+  position: absolute !important;
+  display: none;
+  gap: 6px !important;
+  padding: 4px !important;
+  background: #fff !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-actions button {
+  font: 600 12px inherit !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--qa-line) !important;
+  background: #fff !important;
+  color: var(--qa-fg) !important;
+  cursor: pointer !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-actions button:hover { border-color: var(--qa-accent) !important; }
+.qa-ext-ui.qa-region-overlay .qa-region-actions button.qa-primary {
+  background: var(--qa-accent) !important;
+  color: #fff !important;
+  border-color: var(--qa-accent) !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-actions button.qa-primary:hover { background: var(--qa-accent-hover) !important; }
+.qa-ext-ui.qa-region-overlay .qa-region-banner {
+  position: fixed !important;
+  top: 16px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  padding: 8px 14px !important;
+  background: rgba(15, 23, 42, 0.92) !important;
+  color: #e5e7eb !important;
+  border-radius: 999px !important;
+  font: 500 12px inherit !important;
+  pointer-events: none !important;
+  transition: opacity 600ms ease !important;
+  opacity: 1 !important;
+}
+.qa-ext-ui.qa-region-overlay .qa-region-banner.qa-region-banner-dim { opacity: 0.4 !important; }
+.qa-ext-ui.qa-region-overlay .qa-region-banner kbd {
+  font: 11px ui-monospace, monospace !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  padding: 1px 5px !important;
+  border-radius: 3px !important;
+  margin: 0 2px !important;
+}
+
 /* ============== ANNOTATION EDITOR ============== */
 .qa-ext-ui.qa-annot-overlay {
   position: fixed !important;

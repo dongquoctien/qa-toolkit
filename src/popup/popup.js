@@ -127,6 +127,19 @@
     window.close();
   });
 
+  // Quick capture — manual region drag without picking an element. Popup
+  // closes, content script handles the drag → annotate → modal flow.
+  $('quick-capture')?.addEventListener('click', async () => {
+    const tab = await activeTab();
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: MSG.MANUAL_CAPTURE_START });
+    } catch {
+      alert('Content script not loaded on this page (chrome://, web store, or PDF viewer).');
+      return;
+    }
+    window.close();
+  });
+
   $('export-json').addEventListener('click', async () => {
     await doExport('json');
   });

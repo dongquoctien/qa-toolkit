@@ -6,6 +6,7 @@
     // popup ↔ content
     INSPECTOR_TOGGLE:   'qa/inspector/toggle',
     INSPECTOR_STATE:    'qa/inspector/state',
+    MANUAL_CAPTURE_START: 'qa/manual-capture/start',
 
     // popup ↔ background
     PROFILE_LIST:       'qa/profile/list',
