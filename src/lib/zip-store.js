@@ -123,9 +123,55 @@
     throw new Error('unsupported data type for zip entry');
   }
 
+  // Reader — stored mode only, mirrors buildZip's writer.
+  // Locates EOCD, walks central directory, returns [{ path, data: Uint8Array }].
+  // Throws on DEFLATE-compressed entries (compression method !== 0).
+  async function parseZip(blob) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+    // Find End Of Central Directory record by scanning backwards for its signature.
+    let eocdOff = -1;
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+      if (dv.getUint32(i, true) === 0x06054B50) { eocdOff = i; break; }
+    }
+    if (eocdOff < 0) throw new Error('zip: EOCD not found');
+
+    const cdEntries = dv.getUint16(eocdOff + 10, true);
+    const cdSize    = dv.getUint32(eocdOff + 12, true);
+    const cdOffset  = dv.getUint32(eocdOff + 16, true);
+
+    const out = [];
+    let p = cdOffset;
+    for (let i = 0; i < cdEntries; i++) {
+      if (dv.getUint32(p, true) !== 0x02014B50) throw new Error('zip: bad central directory signature');
+      const compression = dv.getUint16(p + 10, true);
+      const compSize    = dv.getUint32(p + 20, true);
+      const uncompSize  = dv.getUint32(p + 24, true);
+      const nameLen     = dv.getUint16(p + 28, true);
+      const extraLen    = dv.getUint16(p + 30, true);
+      const commentLen  = dv.getUint16(p + 32, true);
+      const localOff    = dv.getUint32(p + 42, true);
+      const name = new TextDecoder('utf-8').decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      p += 46 + nameLen + extraLen + commentLen;
+
+      if (compression !== 0) throw new Error(`zip: compression method ${compression} not supported (stored only)`);
+
+      // Local file header — read name+extra lengths to find data start.
+      if (dv.getUint32(localOff, true) !== 0x04034B50) throw new Error('zip: bad local header signature');
+      const lfhNameLen  = dv.getUint16(localOff + 26, true);
+      const lfhExtraLen = dv.getUint16(localOff + 28, true);
+      const dataOff = localOff + 30 + lfhNameLen + lfhExtraLen;
+      const size = compSize || uncompSize;
+      const data = bytes.subarray(dataOff, dataOff + size);
+      out.push({ path: name, data });
+    }
+    return out;
+  }
+
   const target = (typeof self !== 'undefined' ? self : window);
   target.QA = target.QA || {};
-  target.QA.zipStore = { buildZip };
+  target.QA.zipStore = { buildZip, parseZip };
 
-  if (typeof module !== 'undefined') module.exports = { buildZip };
+  if (typeof module !== 'undefined') module.exports = { buildZip, parseZip };
 })();

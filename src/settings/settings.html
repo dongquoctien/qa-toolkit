@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <title>QA Annotator — Settings</title>
 <link rel="stylesheet" href="settings.css" />
+<!-- Form modal styles — modal renders here for editing saved issues -->
+<link rel="stylesheet" href="../content/content.css" />
 </head>
 <body>
   <header>
@@ -38,7 +40,7 @@
     <textarea id="paste" placeholder='Paste profile JSON here'></textarea>
     <div class="row">
       <label><input id="make-active" type="checkbox" checked /> Set as active after import</label>
-      <button id="import" class="primary" type="button">Import</button>
+      <button id="import" class="primary" type="button">Import profile</button>
     </div>
     <pre id="import-result"></pre>
   </section>
@@ -76,6 +78,25 @@
     </table>
   </section>
 
+  
+  <section class="card">
+    <h2>Issues</h2>
+    <p>
+      All issues you have logged across sites. Click <strong>Edit</strong> to fix the title / severity /
+      expected values, or <strong>Delete</strong> to remove a single issue. Use <strong>Import report</strong>
+      to bring back issues from a previously exported ZIP or JSON file (skips IDs that already exist).
+    </p>
+    <div class="row">
+      <input id="report-file" type="file" accept=".zip,.json,application/zip,application/json" />
+      <button id="report-import" class="primary" type="button">Import issues</button>
+      <span id="report-status" class="muted"></span>
+    </div>
+    <table id="issues">
+      <thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Page · Section</th><th>Viewport</th><th>Saved</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
   <section class="card">
     <h2>Theme color</h2>
     <p>One color drives the whole extension: inspector outline, multi-pick rings, hover tooltip, captured-screenshot border, AND the popup / modal / settings UI accents. Useful when the default conflicts with the site's own UI, or for color-coding QA conventions across projects.</p>
@@ -101,7 +122,9 @@
   </section>
 
   <script src="../lib/messages.js"></script>
+  <script src="../lib/zip-store.js"></script>
   <script src="../profile/profile-validator.js"></script>
+  <script src="../core/form-modal.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>
