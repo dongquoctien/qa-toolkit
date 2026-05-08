@@ -2,7 +2,7 @@
   "$schema": "claude-plugin-v1",
   "name": "qa-tooling",
   "displayName": "QA Tooling",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "QA/QC workflow automation for web projects: auto-detect stack, generate qa-profile.json for the QA Annotator extension, and sync QA reports into Jira via MCP.",
   "author": {
     "name": "qa-tooling contributors"
