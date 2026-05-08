@@ -249,35 +249,34 @@
       console.warn('[QA] regionSelector module missing');
       return null;
     }
-    // Hide caller's UI so the page is clean for the drag selector.
-    let priorDisplay = '';
-    let priorVisibility = '';
-    if (hideEl) {
-      priorDisplay = hideEl.style.getPropertyValue('display');
-      priorVisibility = hideEl.style.getPropertyValue('visibility');
-      hideEl.style.setProperty('display', 'none', 'important');
-      hideEl.style.setProperty('visibility', 'hidden', 'important');
-    }
+    // Hide caller's UI so the page is clean for both the drag selector
+    // AND the captureVisibleTab call that follows. CRITICAL: keep hideEl
+    // hidden until AFTER we capture — restoring earlier means the modal /
+    // popup-trigger UI shows back into the screenshot, baking it into the
+    // PNG. Same applies to QA.overlay (the small floating bar).
+    const restoreCallerUi = stashAndHide(hideEl);
     QA.overlay?.hide();
     await nextPaint();
 
-    let rect = null;
-    try {
-      rect = await QA.regionSelector.pick();
-    } finally {
-      // Restore caller UI.
-      if (hideEl) {
-        if (priorDisplay) hideEl.style.setProperty('display', priorDisplay);
-        else hideEl.style.removeProperty('display');
-        if (priorVisibility) hideEl.style.setProperty('visibility', priorVisibility);
-        else hideEl.style.removeProperty('visibility');
-      }
+    const rect = await QA.regionSelector.pick();
+    if (!rect) {
+      // Cancelled — restore + bail.
+      restoreCallerUi();
+      return null;
     }
-    if (!rect) return null;
 
-    // Capture the viewport, crop to the rect (no annotate — user draws their
-    // own pins/marks in the annotation editor next).
+    // The region overlay's own DOM is removed inside pick() before resolve,
+    // but the browser may not have repainted yet. Two RAFs guarantees the
+    // captureVisibleTab call sees a clean page (same trick the inspector
+    // capture flow uses).
+    await nextPaint();
+
+    // Capture viewport WITHOUT the modal / overlay / region UI present.
     const r = await rpc({ type: MSG.CAPTURE_VISIBLE });
+
+    // Now safe to restore caller UI — capture is already in dataUrl.
+    restoreCallerUi();
+
     if (!r || r.error || !r.dataUrl) {
       console.warn('[QA] capture failed', r?.error);
       return null;
@@ -285,20 +284,42 @@
     const cropped = await QA.screenshot.cropAndAnnotate(r.dataUrl, [rect], { annotate: false });
     let shot = makeShot(issueId || 'ISS-X', cropped, 'manual');
 
-    // Open annotation editor so user can pin / draw.
+    // Editor for pins / shapes / blur. The caller (modal) hides itself again
+    // while the editor is open so the editor full-screens cleanly.
     if (shot && QA.annotationEditor) {
-      const annotated = await QA.annotationEditor.open({
-        dataUrl: shot.dataUrl,
-        settings: liveSettings,
-        severity: undefined
-      });
-      if (annotated) {
-        shot.dataUrl = annotated.dataUrl;
-        shot.annotations = annotated.annotations;
-        shot.source = 'manual-annotated';
+      const restoreAgain = stashAndHide(hideEl);
+      try {
+        const annotated = await QA.annotationEditor.open({
+          dataUrl: shot.dataUrl,
+          settings: liveSettings,
+          severity: undefined
+        });
+        if (annotated) {
+          shot.dataUrl = annotated.dataUrl;
+          shot.annotations = annotated.annotations;
+          shot.source = 'manual-annotated';
+        }
+      } finally {
+        restoreAgain();
       }
     }
     return shot;
+  }
+
+  // Hide an element with `!important display:none` and return a function
+  // that restores the prior inline display/visibility. Safe when el is null.
+  function stashAndHide(el) {
+    if (!el) return () => {};
+    const priorDisplay = el.style.getPropertyValue('display');
+    const priorVisibility = el.style.getPropertyValue('visibility');
+    el.style.setProperty('display', 'none', 'important');
+    el.style.setProperty('visibility', 'hidden', 'important');
+    return () => {
+      if (priorDisplay) el.style.setProperty('display', priorDisplay);
+      else el.style.removeProperty('display');
+      if (priorVisibility) el.style.setProperty('visibility', priorVisibility);
+      else el.style.removeProperty('visibility');
+    };
   }
 
   // Popup-triggered manual capture: no existing modal, no picked element.

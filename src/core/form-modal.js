@@ -188,10 +188,48 @@
         renderExpectedPane(overlay, issue, elementsAll, expectedModel);
       }
 
+      // Re-render the pin-notes panel body when shots change. The panel
+      // module reads issue.screenshots at render time, so we sync the local
+      // shots[] back onto the issue object first, then re-run the panel's
+      // render. Other panels are stateful via their own DOM bindings — we
+      // only need to refresh pin-notes specifically because new pins on a
+      // newly added shot must appear without closing the modal.
+      function refreshPinNotesPanel() {
+        issue.screenshots = shots.slice();
+        issue.screenshot = shots[0] || null;
+        const panelEl = overlay.querySelector('.qa-panel[data-panel-id="pin-notes"]');
+        const pinPanel = self.QA?.panels?.['pin-notes'];
+        if (panelEl && pinPanel?.render) {
+          const body = panelEl.querySelector('.qa-panel-body');
+          if (body) body.innerHTML = pinPanel.render(issue) || '';
+        }
+        // Header pin chip — count pins across all shots and update or remove.
+        let pinTotal = 0;
+        for (const s of shots) for (const l of (s?.annotations?.layers || [])) if (l.type === 'pin') pinTotal++;
+        let chip = overlay.querySelector('.qa-pin-chip');
+        if (pinTotal > 0) {
+          if (!chip) {
+            // Insert before viewport chip if missing.
+            const idBadge = overlay.querySelector('.qa-id-badge');
+            const next = idBadge?.nextElementSibling;
+            chip = document.createElement('span');
+            chip.className = 'qa-pin-chip';
+            idBadge?.parentElement?.insertBefore(chip, next);
+          }
+          chip.textContent = `📍 ${pinTotal}`;
+          chip.title = `${pinTotal} numbered pin${pinTotal === 1 ? '' : 's'} across ${shots.length} screenshot${shots.length === 1 ? '' : 's'}`;
+        } else if (chip) {
+          chip.remove();
+        }
+      }
+
       // Image gallery
       const renderGallery = () => {
         const gal = $('.qa-gallery');
         gal.innerHTML = '';
+        // Always sync local shots[] back onto issue + refresh pin-notes panel
+        // so newly added screenshots' pins show up in the panel immediately.
+        refreshPinNotesPanel();
         if (shots.length === 0) {
           gal.innerHTML = '<div class="qa-gallery-empty">No images yet. Use the buttons below to add one.</div>';
           return;
