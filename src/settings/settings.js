@@ -815,52 +815,49 @@
     }
     const config = fc.getEffectiveFormConfig(_activeFormTab, _liveSettings || {});
 
-    // Common fields
+    // Common fields — flat list, label only (no field id), 🔒 for locked.
     const commonRows = fc.COMMON_FIELDS.map((f) => {
       const state = config.fields?.[f.id] || 'optional';
-      const lockedHint = f.always
-        ? ' <small class="muted">(core — always required)</small>'
-        : '';
       const effectiveState = f.always ? 'required' : state;
-      const disabled = f.always ? 'data-locked="1"' : '';
+      const lockBadge = f.always ? '<span class="fb-lock" title="Core field — always required">🔒</span>' : '';
       return `
-        <tr class="fb-row" data-row-type="field" data-row-id="${escapeAttr(f.id)}" ${disabled}>
-          <td class="fb-name">
-            <strong>${escapeHtml(f.label)}</strong>${lockedHint}
-            <small><code>${escapeHtml(f.id)}</code></small>
-          </td>
-          <td class="fb-state">${pillHtml(effectiveState, f.always)}</td>
-        </tr>
+        <div class="fb-row" data-row-type="field" data-row-id="${escapeAttr(f.id)}">
+          <div class="fb-name">
+            <span>${escapeHtml(f.label)}</span>
+            ${lockBadge}
+          </div>
+          <div class="fb-state">${pillHtml(effectiveState, f.always)}</div>
+        </div>
       `;
     }).join('');
 
-    // Panels
+    // Panels — keep "default in" chip (user finds value in seeing which mode
+    // ships this panel by default, especially when on a custom tab).
     const panels = reg?.listPanelIds?.() || [];
     const panelRows = panels.map((p) => {
       const pcfg = config.panels?.[p.id] || { state: 'optional', fields: {} };
-      const modeChips = (p.modes || []).map((m) => `<span class="tag">${escapeHtml(m)}</span>`).join(' ');
+      const modeChips = (p.modes || []).map((m) => `<span class="fb-mode-chip">${escapeHtml(m)}</span>`).join('');
       return `
-        <tr class="fb-row fb-panel-row" data-row-type="panel" data-row-id="${escapeAttr(p.id)}">
-          <td class="fb-name">
-            <strong>📦 ${escapeHtml(p.title)}</strong>
-            <small>panel · default in: ${modeChips || '—'}</small>
-          </td>
-          <td class="fb-state">${pillHtml(pcfg.state, false)}</td>
-        </tr>
+        <div class="fb-row" data-row-type="panel" data-row-id="${escapeAttr(p.id)}">
+          <div class="fb-name">
+            <span>📦 ${escapeHtml(p.title)}</span>
+            ${modeChips ? `<span class="fb-default-in">default in: ${modeChips}</span>` : ''}
+          </div>
+          <div class="fb-state">${pillHtml(pcfg.state, false)}</div>
+        </div>
       `;
     }).join('');
 
     table.innerHTML = `
-      <table class="fb-table">
-        <thead>
-          <tr><th>Field / Panel</th><th class="fb-state-th">Visibility</th></tr>
-        </thead>
-        <tbody>
-          <tr class="fb-section-head"><td colspan="2">Common form fields</td></tr>
-          ${commonRows}
-          ${panelRows ? `<tr class="fb-section-head"><td colspan="2">Mode panels</td></tr>${panelRows}` : ''}
-        </tbody>
-      </table>
+      <div class="fb-section">
+        <h4 class="fb-section-title">Common fields</h4>
+        <div class="fb-list">${commonRows}</div>
+      </div>
+      ${panelRows ? `
+      <div class="fb-section">
+        <h4 class="fb-section-title">Mode panels</h4>
+        <div class="fb-list">${panelRows}</div>
+      </div>` : ''}
     `;
 
     // Update tabs visually.
@@ -869,16 +866,39 @@
     });
   }
 
+  // Save feedback — light flash + small toast next to the toolbar so the user
+  // sees their click registered. Keeps the optimistic UI fast (no spinner).
+  let _toastTimer = null;
+  function showSaveToast() {
+    let toast = document.getElementById('form-builder-toast');
+    if (!toast) {
+      toast = document.createElement('span');
+      toast.id = 'form-builder-toast';
+      toast.className = 'form-builder-toast';
+      document.getElementById('form-builder-toolbar')?.appendChild(toast);
+    }
+    toast.textContent = '✓ Saved';
+    toast.classList.add('show');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => toast.classList.remove('show'), 1200);
+  }
+
   function pillHtml(state, locked) {
+    // Locked pill (core fields like Title / Severity) shows only a single
+    // "Required" badge — no need to render 3 disabled buttons that imply the
+    // user might be able to change them.
+    if (locked) {
+      return `<span class="fb-pill fb-pill-locked" data-state="required">Required</span>`;
+    }
     const states = [
       { id: 'hidden',   label: 'Hidden' },
       { id: 'optional', label: 'Optional' },
       { id: 'required', label: 'Required' }
     ];
     return `
-      <div class="fb-pill${locked ? ' fb-pill-locked' : ''}" role="radiogroup">
+      <div class="fb-pill" data-state="${escapeAttr(state)}" role="radiogroup">
         ${states.map((s) => `
-          <button type="button" class="fb-pill-btn ${state === s.id ? 'is-active' : ''}" data-state="${escapeAttr(s.id)}" ${locked ? 'disabled' : ''}>${escapeHtml(s.label)}</button>
+          <button type="button" class="fb-pill-btn ${state === s.id ? 'is-active' : ''}" data-state="${escapeAttr(s.id)}">${escapeHtml(s.label)}</button>
         `).join('')}
       </div>
     `;
@@ -919,9 +939,13 @@
       const rowType = row.dataset.rowType;
       const rowId = row.dataset.rowId;
       const newState = pillBtn.dataset.state;
-      // Optimistic: update UI immediately.
+      // Optimistic: update UI immediately + toggle data-state on parent pill
+      // so the colored background animates correctly via CSS.
+      const pill = pillBtn.closest('.fb-pill');
+      if (pill) pill.dataset.state = newState;
       row.querySelectorAll('.fb-pill-btn').forEach((b) => b.classList.toggle('is-active', b === pillBtn));
       await persistFormBuilder(rowType, rowId, newState);
+      showSaveToast();
     });
     // Copy-from button.
     document.getElementById('form-builder-copy-apply')?.addEventListener('click', async () => {
@@ -939,8 +963,9 @@
       if (r?.settings) _liveSettings = r.settings;
       refreshFormBuilder();
     });
-    // Reset button.
-    document.getElementById('form-builder-reset')?.addEventListener('click', async () => {
+    // Reset button (now a text link — prevent default so URL doesn't change).
+    document.getElementById('form-builder-reset')?.addEventListener('click', async (e) => {
+      e.preventDefault();
       if (!confirm(`Reset "${_activeFormTab}" form to default config?`)) return;
       // Clear the user override by setting modeForms[mode] = null. The
       // service-worker mergeSettings is a top-level shallow merge, so we
