@@ -406,22 +406,40 @@
     }
 
     // Build shared expected from model.sharedRows + figma fields.
+    // When the corresponding form field is HIDDEN, harvest can't read DOM
+    // (the input doesn't exist). Preserve whatever was already on the issue
+    // so a Hidden field doesn't silently nuke saved data.
+    const formCfgForHarvest = getFormConfig(opts);
     const expected = {};
-    for (const { key, value } of expectedModel.sharedRows) {
-      const k = (key || '').trim();
-      const v = (value || '').trim();
-      if (k && v) expected[k] = v;
+    if (fieldVisible(formCfgForHarvest, 'expectedCss')) {
+      for (const { key, value } of expectedModel.sharedRows) {
+        const k = (key || '').trim();
+        const v = (value || '').trim();
+        if (k && v) expected[k] = v;
+      }
+    } else {
+      // Field hidden — keep original non-figma keys verbatim.
+      for (const [k, v] of Object.entries(issue.expected || {})) {
+        if (!k.startsWith('figma') && v) expected[k] = v;
+      }
     }
-    const figmaLink = get('.qa-figma-link').trim();
-    if (figmaLink) {
-      expected.figmaLink = figmaLink;
-      // Carry through auto-match metadata only when the link is unchanged.
-      if (issue.expected?.figmaLink === figmaLink) {
-        if (issue.expected.figmaNodeId)      expected.figmaNodeId      = issue.expected.figmaNodeId;
-        if (issue.expected.figmaBreadcrumb)  expected.figmaBreadcrumb  = issue.expected.figmaBreadcrumb;
-        if (issue.expected.figmaScore != null) expected.figmaScore     = issue.expected.figmaScore;
-        if (issue.expected.figmaViewport)    expected.figmaViewport    = issue.expected.figmaViewport;
-        if (issue.expected.figmaAutoMatched) expected.figmaAutoMatched = true;
+    if (fieldVisible(formCfgForHarvest, 'figmaLink')) {
+      const figmaLink = get('.qa-figma-link')?.value?.trim() || '';
+      if (figmaLink) {
+        expected.figmaLink = figmaLink;
+        // Carry through auto-match metadata only when the link is unchanged.
+        if (issue.expected?.figmaLink === figmaLink) {
+          if (issue.expected.figmaNodeId)      expected.figmaNodeId      = issue.expected.figmaNodeId;
+          if (issue.expected.figmaBreadcrumb)  expected.figmaBreadcrumb  = issue.expected.figmaBreadcrumb;
+          if (issue.expected.figmaScore != null) expected.figmaScore     = issue.expected.figmaScore;
+          if (issue.expected.figmaViewport)    expected.figmaViewport    = issue.expected.figmaViewport;
+          if (issue.expected.figmaAutoMatched) expected.figmaAutoMatched = true;
+        }
+      }
+    } else {
+      // Figma field hidden — preserve all figma* keys verbatim.
+      for (const [k, v] of Object.entries(issue.expected || {})) {
+        if (k.startsWith('figma') && v != null) expected[k] = v;
       }
     }
     out.expected = expected;
@@ -495,15 +513,16 @@
     return fieldState(formCfg, fieldId) === 'required';
   }
 
-  // Show Expected CSS / Figma link when config visible OR issue has data.
-  function shouldShowExpectedCss(formCfg, issue) {
-    if (fieldVisible(formCfg, 'expectedCss')) return true;
-    const exp = issue.expected || {};
-    return Object.keys(exp).some((k) => !k.startsWith('figma'));
+  // Strict mode-config visibility — Hidden in the form builder ALWAYS hides
+  // the field, even when the issue has saved data (the data persists in
+  // issue.expected so it isn't lost; user just can't see it without flipping
+  // back to Optional/Required). Earlier versions force-showed the field on
+  // existing data, which contradicted the user's explicit Hidden choice.
+  function shouldShowExpectedCss(formCfg, _issue) {
+    return fieldVisible(formCfg, 'expectedCss');
   }
-  function shouldShowFigmaField(formCfg, issue) {
-    if (fieldVisible(formCfg, 'figmaLink')) return true;
-    return !!(issue.expected?.figmaLink);
+  function shouldShowFigmaField(formCfg, _issue) {
+    return fieldVisible(formCfg, 'figmaLink');
   }
 
   function renderHtml(issue, opts = {}) {
