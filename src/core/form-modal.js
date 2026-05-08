@@ -55,14 +55,15 @@
         activeTab: 'all'   // 'all' | 0 | 1 | 2 ...
       };
 
-      // Cleanup queue — modules (panels, custom listeners) can push their own
+      // Cleanup queue — modules (panels, custom listeners) push their own
       // teardown function so finish() runs them all in order before resolve.
+      // We register listener removals via this queue too, to avoid TDZ on
+      // const-declared handlers (onPaste / onKey are declared lower in this
+      // function; an early finish() call would crash trying to read them).
       const cleanups = [];
       const finish = (result) => {
         for (const fn of cleanups) { try { fn(); } catch {} }
         overlay.remove();
-        document.removeEventListener('keydown', onKey, true);
-        overlay.removeEventListener('paste', onPaste);
         resolve(result);
       };
 
@@ -158,13 +159,24 @@
         }
       };
       document.addEventListener('keydown', onKey, true);
+      cleanups.push(() => document.removeEventListener('keydown', onKey, true));
 
-      // Property combo
-      $('.qa-prop-datalist').innerHTML = COMMON_PROPS.map((p) => `<option value="${p}"></option>`).join('');
+      // Property combo — only present when Expected CSS rows are rendered
+      // (mode === 'design-fidelity' / 'custom' OR re-edit with saved data).
+      // Other modes drop these elements entirely; null-guard so we don't
+      // crash on first pick after switching to a non-design mode.
+      const propDatalist = $('.qa-prop-datalist');
+      if (propDatalist) {
+        propDatalist.innerHTML = COMMON_PROPS.map((p) => `<option value="${p}"></option>`).join('');
+      }
 
-      // Expected tabs (multi-pick only) + initial pane render
-      bindExpectedTabs(overlay, issue, elementsAll, expectedModel);
-      renderExpectedPane(overlay, issue, elementsAll, expectedModel);
+      // Expected tabs (multi-pick only) + initial pane render. Both functions
+      // already query for elements that may not exist; double-check the pane
+      // before driving the binding so they no-op cleanly on non-design modes.
+      if (overlay.querySelector('.qa-expected-pane')) {
+        bindExpectedTabs(overlay, issue, elementsAll, expectedModel);
+        renderExpectedPane(overlay, issue, elementsAll, expectedModel);
+      }
 
       // Image gallery
       const renderGallery = () => {
@@ -298,6 +310,7 @@
         }
       };
       overlay.addEventListener('paste', onPaste);
+      cleanups.push(() => overlay.removeEventListener('paste', onPaste));
 
       // Upload
       $('.qa-upload-input').addEventListener('change', async (e) => {
@@ -805,6 +818,7 @@
     const tabsEl = root.querySelector('.qa-expected-tabs');
     const pane = root.querySelector('.qa-expected-pane');
     const addBtn = root.querySelector('.qa-add-row');
+    if (!pane || !addBtn) return;        // mode hides Expected — nothing to bind
 
     // Add-property button always targets the active tab.
     addBtn.addEventListener('click', () => {
@@ -837,6 +851,7 @@
 
   function renderExpectedPane(root, issue, elements, model) {
     const pane = root.querySelector('.qa-expected-pane');
+    if (!pane) return;                   // mode hides Expected — no-op
     pane.dataset.tab = String(model.activeTab);
     pane.innerHTML = '';
     const actuals = getActualMap(issue);
