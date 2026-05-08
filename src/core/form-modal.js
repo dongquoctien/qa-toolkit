@@ -595,15 +595,17 @@
             </div>` : ''}
           </div>` : ''}
 
+          ${fieldVisible(formCfg, 'element') ? `
           <div class="qa-row">
-            <label>${elements.length > 1 ? `Elements (${elements.length})` : 'Element'}</label>
+            <label>${elements.length > 1 ? `Elements (${elements.length})` : 'Element'}${fieldRequired(formCfg, 'element') ? ' <span class="qa-req">*</span>' : ''}</label>
             <ul class="qa-elements-list">${elementsList}</ul>
-          </div>
+          </div>` : ''}
 
+          ${fieldVisible(formCfg, 'computed') ? `
           <div class="qa-row">
-            <label>Computed (actual)</label>
+            <label>Computed (actual)${fieldRequired(formCfg, 'computed') ? ' <span class="qa-req">*</span>' : ''}</label>
             ${renderComputedBlock(issue, elements)}
-          </div>
+          </div>` : ''}
 
           ${shouldShowExpectedCss(formCfg, issue) ? `
           <div class="qa-row">
