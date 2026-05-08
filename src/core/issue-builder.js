@@ -74,12 +74,38 @@
     // and avoids serializing an empty array into qa-report-v1.
     const expectedPerElement = els.length > 1 ? els.map(() => null) : undefined;
 
+    // Settings-driven defaults — title template substitution + URL-pattern
+    // auto-tags. Profile values still win over global settings (a project can
+    // override severity/type per-issue type) but settings provide cross-project
+    // workflow defaults for QA who jumps between many projects.
+    const settings = ctx.settings || null;
+    const sd = settings?.defaults || {};
+    const sectionVal = sectionEl ? sectionEl.getAttribute(conv.sectionAttribute) : null;
+    const i18nKeyVal = i18nEl ? i18nEl.getAttribute(conv.i18nKeyAttribute) : null;
+
+    const seededTitle = expandTemplate(sd.titleTemplate || '', {
+      section: sectionVal || '',
+      page: page || '',
+      viewport: env.viewport ? `${env.viewport.w}×${env.viewport.h}` : '',
+      breakpoint: env.breakpoint?.label || '',
+      tag: primary.tagName?.toLowerCase() || '',
+      element: primary.tagName?.toLowerCase() || '',
+      i18nKey: i18nKeyVal || '',
+      url: location.pathname || ''
+    });
+
+    const autoTags = computeAutoTags(sd.autoTagRules, location.href);
+
+    const seededSeverity = sd.severity || profile.issueTemplates?.defaultSeverity || 'minor';
+    const seededType     = sd.type     || profile.issueTemplates?.defaultType     || 'visual';
+
     return {
       id,
       profileId: profile.id,
-      severity: profile.issueTemplates?.defaultSeverity || 'minor',
-      type: profile.issueTemplates?.defaultType || 'visual',
-      title: '',
+      severity: seededSeverity,
+      type: seededType,
+      title: seededTitle,
+      tags: autoTags,
 
       page,
       section: sectionEl ? sectionEl.getAttribute(conv.sectionAttribute) : null,
@@ -131,6 +157,28 @@
       rect: { x: Math.round(rect.left), y: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height) },
       i18nKey: el.closest('[data-i18n-key]')?.getAttribute('data-i18n-key') || null
     };
+  }
+
+  // {{key}} substitution. Empty values render as empty strings (not "{{key}}")
+  // so a partial template like "[{{section}}] " on a page without a section
+  // resolves to "[] " — caller can choose to .trim() or leave the noise visible.
+  function expandTemplate(tmpl, vars) {
+    if (!tmpl || typeof tmpl !== 'string') return '';
+    return tmpl.replace(/\{\{(\w+)\}\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : ''));
+  }
+
+  // Apply auto-tag rules to the current URL. Each rule is { pattern, tag } —
+  // pattern is a regex source string. Bad regexes are skipped silently.
+  function computeAutoTags(rules, url) {
+    if (!Array.isArray(rules) || rules.length === 0) return [];
+    const tags = [];
+    for (const r of rules) {
+      if (!r || !r.pattern || !r.tag) continue;
+      try {
+        if (new RegExp(r.pattern).test(url)) tags.push(r.tag);
+      } catch { /* malformed regex — skip */ }
+    }
+    return tags;
   }
 
   function recordsEqual(a, b) {

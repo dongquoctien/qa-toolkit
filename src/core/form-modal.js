@@ -62,11 +62,66 @@
         resolve(result);
       };
 
+      // Required fields gate, settings-driven. Any of: title, severity,
+      // expected, screenshot. When the validate fails we DON'T finish — we
+      // highlight the offending row so the user knows what's missing. The
+      // built-in severity is never empty (always pre-seeded), so a strict
+      // 'severity' requirement here mostly catches the 'no severity dropdown'
+      // edge case in customized profiles.
+      const requiredFields = (opts?.settings?.defaults?.requiredFields) || [];
+      function validateRequired() {
+        const errors = [];
+        const titleVal = $('.qa-title')?.value?.trim() || '';
+        const severityVal = $('.qa-severity')?.value || '';
+        const hasShots = shots && shots.length > 0;
+        const hasExpected = (() => {
+          const pane = overlay.querySelector('.qa-expected-pane');
+          if (!pane) return false;
+          for (const row of pane.querySelectorAll('.qa-expected-row')) {
+            const k = row.querySelector('.qa-exp-key')?.value?.trim() || '';
+            const v = row.querySelector('.qa-exp-val')?.value?.trim() || '';
+            if (k && v) return true;
+          }
+          return !!($('.qa-figma-link')?.value?.trim());
+        })();
+        if (requiredFields.includes('title')      && !titleVal)    errors.push({ field: 'title',      sel: '.qa-title' });
+        if (requiredFields.includes('severity')   && !severityVal) errors.push({ field: 'severity',   sel: '.qa-severity' });
+        if (requiredFields.includes('screenshot') && !hasShots)    errors.push({ field: 'screenshot', sel: '.qa-gallery' });
+        if (requiredFields.includes('expected')   && !hasExpected) errors.push({ field: 'expected',   sel: '.qa-expected-pane' });
+        return errors;
+      }
+      function showValidationErrors(errors) {
+        // Clear previous error styles.
+        overlay.querySelectorAll('.qa-required-error').forEach((el) => el.classList.remove('qa-required-error'));
+        for (const err of errors) {
+          const el = $(err.sel);
+          if (el) el.classList.add('qa-required-error');
+        }
+        const banner = overlay.querySelector('.qa-validation-banner');
+        if (banner) {
+          banner.textContent = `Missing required: ${errors.map((e) => e.field).join(', ')}`;
+          banner.hidden = false;
+        }
+      }
+      function hideValidation() {
+        overlay.querySelectorAll('.qa-required-error').forEach((el) => el.classList.remove('qa-required-error'));
+        const banner = overlay.querySelector('.qa-validation-banner');
+        if (banner) { banner.hidden = true; banner.textContent = ''; }
+      }
+      // Re-validate on input so the user sees errors clear as they type.
+      overlay.addEventListener('input', hideValidation);
+
       $$('.qa-cancel').forEach((btn) => btn.addEventListener('click', () => finish(null)));
       overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
       $('.qa-save').addEventListener('click', () => {
-        // Final harvest of the active expected pane before save.
         harvestActivePane(overlay, expectedModel);
+        const errors = validateRequired();
+        if (errors.length > 0) {
+          showValidationErrors(errors);
+          const first = $(errors[0].sel);
+          if (first && first.focus) first.focus();
+          return;
+        }
         finish(harvest(overlay, issue, shots, expectedModel));
       });
 
@@ -74,7 +129,30 @@
       const elementsForTabs = issue.elements && issue.elements.length > 1 ? issue.elements : [issue.element];
       bindComputedTabs(overlay, issue, elementsForTabs);
 
-      const onKey = (e) => { if (e.key === 'Escape') finish(null); };
+      // Severity hotkeys — settings-configurable. Default 1=critical, 2=major,
+      // 3=minor, 4=info. Don't fire when typing into inputs/textareas.
+      const sevHotkeys = opts?.settings?.defaults?.severityHotkeys || { 1: 'critical', 2: 'major', 3: 'minor', 4: 'info' };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { finish(null); return; }
+        // Skip if user is currently typing in any input/textarea/select. Check
+        // both e.target AND document.activeElement so synthetic events don't
+        // bypass the guard. ContentEditable check covers rich text widgets.
+        const tgt = e.target;
+        const active = document.activeElement;
+        const inField = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+        if (inField(tgt) || inField(active)) return;
+        const mapped = sevHotkeys[e.key];
+        if (mapped) {
+          const sel = $('.qa-severity');
+          if (sel) {
+            sel.value = mapped;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            // Brief flash so the user sees the change.
+            sel.classList.add('qa-flash');
+            setTimeout(() => sel.classList.remove('qa-flash'), 300);
+          }
+        }
+      };
       document.addEventListener('keydown', onKey, true);
 
       // Property combo
@@ -97,17 +175,49 @@
           item.className = 'qa-thumb';
           item.draggable = true;
           item.dataset.idx = String(i);
+          const layers = shot.annotations?.layers || [];
+          const pinsHere = layers.filter((l) => l.type === 'pin').length;
+          const otherAnnots = layers.length - pinsHere;
+          // Build per-thumbnail badges: pin count (📍 N) and other-shape count.
+          const pinBadge = pinsHere > 0
+            ? `<span class="qa-thumb-pin-badge" title="${pinsHere} numbered pin${pinsHere === 1 ? '' : 's'}">📍${pinsHere}</span>`
+            : '';
+          const annotBadge = otherAnnots > 0
+            ? `<span class="qa-thumb-annot-badge" title="${otherAnnots} other annotation${otherAnnots === 1 ? '' : 's'} (rect / arrow / text / blur)">✦${otherAnnots}</span>`
+            : '';
           item.innerHTML = `
             <span class="qa-thumb-handle" title="Drag to reorder">⠿</span>
             <span class="qa-thumb-num">${i + 1}</span>
+            ${pinBadge}${annotBadge}
             <img src="${shot.dataUrl}" alt="" />
-            <span class="qa-thumb-meta">${shot.source || ''}</span>
+            <span class="qa-thumb-meta">${escape(shot.source || '')}</span>
+            <button class="qa-thumb-annotate" type="button" title="Annotate (pin / arrow / blur / text)">✎</button>
             <button class="qa-thumb-del" type="button" title="Remove">×</button>
           `;
           item.querySelector('.qa-thumb-del').addEventListener('click', (e) => {
             e.stopPropagation();
             shots.splice(i, 1);
             renderGallery();
+          });
+          item.querySelector('.qa-thumb-annotate').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!QA.annotationEditor) { alert('Annotation editor not loaded'); return; }
+            // Hide modal so editor takes over the screen, restore after.
+            overlay.style.setProperty('display', 'none', 'important');
+            try {
+              const annotated = await QA.annotationEditor.open({
+                dataUrl: shot.dataUrl,
+                annotations: shot.annotations,
+                settings: opts.settings || null,
+                severity: issue.severity
+              });
+              if (annotated) {
+                shots[i] = { ...shot, dataUrl: annotated.dataUrl, annotations: annotated.annotations };
+                renderGallery();
+              }
+            } finally {
+              overlay.style.removeProperty('display');
+            }
           });
           item.querySelector('img').addEventListener('click', () => {
             // Open in new tab as data URL preview
@@ -245,6 +355,9 @@
     out.severity = get('.qa-severity');
     out.type     = get('.qa-type');
     out.note     = get('.qa-note');
+    // tags array is preserved as-is from issue (set at build by auto-tag rules);
+    // future: a chip-input UI in the modal will let users add/remove tags here.
+    if (!Array.isArray(out.tags)) out.tags = [];
 
     // Build shared expected from model.sharedRows + figma fields.
     const expected = {};
@@ -341,19 +454,43 @@
       `Theme: ${dev.prefersDark ? 'dark' : 'light'}${dev.prefersReducedMotion ? ' · reduced-motion' : ''}`
     ].filter(Boolean).join('\n');
 
+    const mode = opts?.settings?.mode || null;
+    const MODE_LABELS = {
+      'prod-bug': 'PROD bug', 'design-fidelity': 'Design',
+      'admin': 'Admin', 'a11y': 'A11y', 'i18n': 'i18n', 'custom': 'Custom'
+    };
+    const modeChip = mode
+      ? `<span class="qa-mode-chip" data-mode="${escape(mode)}" title="QA mode: ${escape(MODE_LABELS[mode] || mode)} — change in Settings">${escape(MODE_LABELS[mode] || mode)}</span>`
+      : '';
+
+    // Total numbered pins across all screenshots — surfaced so the QA author
+    // sees at a glance how many annotations are already attached without
+    // expanding every thumbnail.
+    const allShots = Array.isArray(issue.screenshots) ? issue.screenshots : (issue.screenshot ? [issue.screenshot] : []);
+    let pinTotal = 0;
+    for (const s of allShots) for (const l of (s?.annotations?.layers || [])) if (l.type === 'pin') pinTotal++;
+    const pinChip = pinTotal > 0
+      ? `<span class="qa-pin-chip" title="${pinTotal} numbered pin${pinTotal === 1 ? '' : 's'} across ${allShots.length} screenshot${allShots.length === 1 ? '' : 's'}">📍 ${pinTotal}</span>`
+      : '';
+
     return `
       <div class="qa-modal" role="dialog" aria-label="QA issue">
         <header class="qa-modal-header">
           <span class="qa-id-badge">${issue.id}</span>
+          ${modeChip}
+          ${pinChip}
           <span class="qa-vp-chip" title="${escape(tooltipLines)}">${escape(chipText)}</span>
           <span class="qa-modal-meta">${sectionLabel} · ${sourceLabel}${elements.length > 1 ? ` · ${elements.length} elements` : ''}</span>
           <button class="qa-cancel qa-icon-btn" aria-label="Close">×</button>
         </header>
 
         <section class="qa-modal-body">
+          <div class="qa-validation-banner" role="alert" hidden></div>
+
           <div class="qa-row">
             <label>Title</label>
             <input class="qa-title" type="text" placeholder="Short description" value="${escape(issue.title || '')}" />
+            ${(issue.tags || []).length ? `<div class="qa-tags-row">${(issue.tags || []).map((t) => `<span class="qa-tag-chip">${escape(t)}</span>`).join('')}</div>` : ''}
           </div>
 
           <div class="qa-row qa-row-2">
@@ -405,6 +542,9 @@
             <textarea class="qa-note" rows="3" placeholder="Free-text context (paste images here too)"></textarea>
           </div>
 
+          ${renderRuntimeContext(issue)}
+          ${renderA11yFindings(issue)}
+
           <div class="qa-row">
             <div class="qa-label-row">
               <label>Screenshots</label>
@@ -424,6 +564,97 @@
           <button class="qa-cancel qa-btn-ghost" type="button">Cancel</button>
           <button class="qa-save qa-btn-primary" type="button">Save issue</button>
         </footer>
+      </div>
+    `;
+  }
+
+  // Compact display block for the runtime buffer snapshot — shown only when
+  // console / network capture was on at pick time and the buffer had entries.
+  // Each list collapses to "+N more" past 3 to keep the modal readable.
+  function renderRuntimeContext(issue) {
+    const rc = issue.runtimeContext;
+    if (!rc) return '';
+    const cons = rc.console || [];
+    const net = rc.network || [];
+    if (cons.length === 0 && net.length === 0) return '';
+    const consPreview = cons.slice(0, 3).map((c) => {
+      const lvl = c.level === 'error' ? '✗' : '⚠';
+      return `<li><span class="qa-rc-level qa-rc-${escape(c.level)}">${lvl} ${escape(c.level)}</span> <code>${escape((c.message || '').slice(0, 200))}</code></li>`;
+    }).join('');
+    const consMore = cons.length > 3 ? `<li class="qa-rc-more">+${cons.length - 3} more</li>` : '';
+    const netPreview = net.slice(0, 3).map((n) => {
+      return `<li><span class="qa-rc-status qa-rc-status-${n.status >= 500 ? '5xx' : n.status >= 400 ? '4xx' : 'fail'}">${n.status || 'ERR'}</span> <code>${escape(n.method || '')} ${escape((n.url || '').slice(0, 120))}</code> <small class="qa-muted">${n.durationMs || 0}ms</small></li>`;
+    }).join('');
+    const netMore = net.length > 3 ? `<li class="qa-rc-more">+${net.length - 3} more</li>` : '';
+    return `
+      <div class="qa-row qa-runtime-context">
+        <label>Runtime context <span class="qa-rc-tag">auto</span></label>
+        ${cons.length > 0 ? `<div class="qa-rc-block">
+          <div class="qa-rc-head">Console — ${cons.length}</div>
+          <ul class="qa-rc-list">${consPreview}${consMore}</ul>
+        </div>` : ''}
+        ${net.length > 0 ? `<div class="qa-rc-block">
+          <div class="qa-rc-head">Network failures — ${net.length}</div>
+          <ul class="qa-rc-list">${netPreview}${netMore}</ul>
+        </div>` : ''}
+      </div>
+    `;
+  }
+
+  // Accessibility findings block — shown when axe scan ran at pick time
+  // (settings.sources.a11y === true). Per-violation: impact badge + WCAG SC +
+  // help link + first failing selector. Contrast badge appears separately even
+  // when there are no axe violations (it's a quick standalone check).
+  function renderA11yFindings(issue) {
+    const f = issue.a11yFindings;
+    if (!f) return '';
+    const v = f.violations || [];
+    const c = f.contrast;
+    if (v.length === 0 && !c) return '';
+
+    const impactColor = (impact) => {
+      if (impact === 'critical') return 'qa-rc-status-5xx';     // red
+      if (impact === 'serious')  return 'qa-rc-status-4xx';     // orange
+      return 'qa-rc-status-fail';                                // gray
+    };
+
+    const violationItems = v.slice(0, 5).map((vi) => {
+      const wcag = (vi.wcag || []).join(' ');
+      const help = vi.helpUrl
+        ? `<a href="${escape(vi.helpUrl)}" target="_blank" rel="noopener" class="qa-a11y-help">help ↗</a>`
+        : '';
+      return `<li>
+        <span class="qa-rc-status ${impactColor(vi.impact)}">${escape(vi.impact || 'minor')}</span>
+        <code>${escape(vi.id)}</code>
+        ${wcag ? `<small class="qa-muted">${escape(wcag)}</small>` : ''}
+        ${help}
+        <div class="qa-a11y-desc">${escape(vi.help || vi.description || '')}</div>
+        ${vi.selectors?.length ? `<div class="qa-a11y-sel"><code>${escape(vi.selectors[0])}</code></div>` : ''}
+      </li>`;
+    }).join('');
+    const more = v.length > 5 ? `<li class="qa-rc-more">+${v.length - 5} more</li>` : '';
+
+    const contrastBlock = c
+      ? `<div class="qa-rc-block qa-a11y-contrast">
+          <div class="qa-rc-head">Contrast</div>
+          <div class="qa-a11y-contrast-row">
+            <span class="qa-a11y-swatch" style="background:${escape(c.fg)}"></span>
+            <span class="qa-a11y-swatch" style="background:${escape(c.bg)}"></span>
+            <strong>${c.ratio}:1</strong>
+            <small class="qa-muted">need ≥ ${c.threshold}:1</small>
+            ${c.fail ? '<span class="qa-rc-status qa-rc-status-4xx">fails AA</span>' : '<span class="qa-rc-status qa-rc-pass">passes AA</span>'}
+          </div>
+        </div>`
+      : '';
+
+    return `
+      <div class="qa-row qa-a11y-findings">
+        <label>Accessibility <span class="qa-rc-tag">axe-core</span></label>
+        ${v.length > 0 ? `<div class="qa-rc-block">
+          <div class="qa-rc-head">Violations — ${v.length}</div>
+          <ul class="qa-rc-list qa-a11y-list">${violationItems}${more}</ul>
+        </div>` : '<div class="qa-rc-block qa-a11y-clean"><span class="qa-rc-status qa-rc-pass">no violations</span></div>'}
+        ${contrastBlock}
       </div>
     `;
   }

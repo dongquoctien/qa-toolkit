@@ -105,6 +105,203 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
 }
 .qa-ext-ui .qa-modal-meta { color: var(--qa-muted) !important; font-size: 12px !important; flex: 1 !important; }
 
+/* Mode chip in modal header — colored per mode so user knows context at a glance */
+.qa-ext-ui .qa-mode-chip {
+  font: 600 10px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  color: #fff !important;
+  background: var(--qa-accent) !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+  cursor: help !important;
+}
+.qa-ext-ui .qa-mode-chip[data-mode="prod-bug"]        { background: #ef4444 !important; }
+.qa-ext-ui .qa-mode-chip[data-mode="design-fidelity"] { background: #8b5cf6 !important; }
+.qa-ext-ui .qa-mode-chip[data-mode="admin"]           { background: #0ea5e9 !important; }
+.qa-ext-ui .qa-mode-chip[data-mode="a11y"]            { background: #22c55e !important; }
+.qa-ext-ui .qa-mode-chip[data-mode="i18n"]            { background: #f97316 !important; }
+.qa-ext-ui .qa-mode-chip[data-mode="custom"]          { background: #6b7280 !important; }
+
+.qa-ext-ui .qa-pin-chip {
+  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  background: var(--qa-accent) !important;
+  color: #fff !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+  cursor: help !important;
+}
+
+/* Runtime context (console + network failures auto-attached at pick time) */
+.qa-ext-ui .qa-runtime-context .qa-rc-tag {
+  display: inline-block !important;
+  margin-left: 8px !important;
+  padding: 1px 6px !important;
+  font: 600 10px/1 -apple-system, system-ui, sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  color: var(--qa-muted) !important;
+  background: var(--qa-soft-2) !important;
+  border-radius: 999px !important;
+}
+.qa-ext-ui .qa-rc-block {
+  margin-top: 8px !important;
+  padding: 8px 10px !important;
+  background: var(--qa-soft) !important;
+  border: 1px solid var(--qa-line) !important;
+  border-radius: var(--qa-radius-sm) !important;
+}
+.qa-ext-ui .qa-rc-head {
+  font-size: 11px !important;
+  color: var(--qa-muted) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  margin-bottom: 4px !important;
+}
+.qa-ext-ui .qa-rc-list {
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+  font-size: 12px !important;
+}
+.qa-ext-ui .qa-rc-list li {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 6px !important;
+  padding: 3px 0 !important;
+  border-bottom: 1px dashed var(--qa-line) !important;
+}
+.qa-ext-ui .qa-rc-list li:last-child { border-bottom: 0 !important; }
+.qa-ext-ui .qa-rc-list code {
+  font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  color: var(--qa-fg) !important;
+  background: transparent !important;
+  word-break: break-all !important;
+  flex: 1 !important;
+}
+.qa-ext-ui .qa-rc-level {
+  display: inline-block !important;
+  padding: 1px 6px !important;
+  font: 600 10px/1.2 -apple-system, system-ui, sans-serif !important;
+  border-radius: 4px !important;
+  white-space: nowrap !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  flex-shrink: 0 !important;
+}
+.qa-ext-ui .qa-rc-error { color: #fff !important; background: #ef4444 !important; }
+.qa-ext-ui .qa-rc-warn  { color: #92400e !important; background: #fef3c7 !important; }
+.qa-ext-ui .qa-rc-status {
+  display: inline-block !important;
+  padding: 1px 6px !important;
+  font: 600 10px/1.2 ui-monospace, monospace !important;
+  border-radius: 4px !important;
+  flex-shrink: 0 !important;
+  color: #fff !important;
+}
+.qa-ext-ui .qa-rc-status-5xx { background: #ef4444 !important; }
+.qa-ext-ui .qa-rc-status-4xx { background: #f97316 !important; }
+.qa-ext-ui .qa-rc-status-fail{ background: #6b7280 !important; }
+.qa-ext-ui .qa-rc-more {
+  font-style: italic !important;
+  color: var(--qa-muted) !important;
+  border-bottom: 0 !important;
+}
+.qa-ext-ui .qa-muted { color: var(--qa-muted) !important; font-size: 10px !important; }
+
+/* Accessibility findings (axe-core scan + contrast). Reuses the runtime-context
+   visual language so both info blocks read consistently in the modal. */
+.qa-ext-ui .qa-a11y-list li { flex-direction: column !important; align-items: stretch !important; gap: 4px !important; padding: 6px 0 !important; }
+.qa-ext-ui .qa-a11y-list li > * { font-size: 12px !important; }
+.qa-ext-ui .qa-a11y-list li > .qa-rc-status,
+.qa-ext-ui .qa-a11y-list li > code,
+.qa-ext-ui .qa-a11y-list li > small,
+.qa-ext-ui .qa-a11y-list li > .qa-a11y-help { display: inline-block !important; margin-right: 6px !important; }
+.qa-ext-ui .qa-a11y-help {
+  font-size: 11px !important;
+  color: var(--qa-accent) !important;
+  text-decoration: none !important;
+}
+.qa-ext-ui .qa-a11y-help:hover { text-decoration: underline !important; }
+.qa-ext-ui .qa-a11y-desc { color: var(--qa-fg) !important; font-size: 11px !important; line-height: 1.5 !important; }
+.qa-ext-ui .qa-a11y-sel code {
+  font-size: 11px !important;
+  color: var(--qa-muted) !important;
+  background: var(--qa-soft-2) !important;
+  padding: 1px 4px !important;
+  border-radius: 3px !important;
+}
+.qa-ext-ui .qa-rc-pass {
+  background: #22c55e !important;
+  color: #fff !important;
+}
+.qa-ext-ui .qa-a11y-clean {
+  text-align: center !important;
+  padding: 12px !important;
+}
+.qa-ext-ui .qa-a11y-contrast-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 13px !important;
+}
+.qa-ext-ui .qa-a11y-swatch {
+  display: inline-block !important;
+  width: 20px !important; height: 20px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--qa-line) !important;
+  flex-shrink: 0 !important;
+}
+
+/* Validation banner — shown when required fields are missing on save */
+.qa-ext-ui .qa-validation-banner {
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fecaca !important;
+  border-radius: var(--qa-radius-sm) !important;
+  padding: 8px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  margin-bottom: 12px !important;
+}
+.qa-ext-ui .qa-required-error,
+.qa-ext-ui .qa-required-error input,
+.qa-ext-ui .qa-required-error select,
+.qa-ext-ui .qa-required-error textarea {
+  border-color: #ef4444 !important;
+  outline: 2px solid color-mix(in srgb, #ef4444 25%, transparent) !important;
+  outline-offset: 1px !important;
+}
+
+/* Severity flash on hotkey press */
+.qa-ext-ui .qa-flash {
+  animation: qa-sev-flash 280ms ease !important;
+}
+@keyframes qa-sev-flash {
+  0%   { box-shadow: 0 0 0 0 var(--qa-accent); }
+  60%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--qa-accent) 30%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Auto-tag chips under the title — small, neutral, non-editable for v0.2.0 */
+.qa-ext-ui .qa-tags-row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+  margin-top: 6px !important;
+}
+.qa-ext-ui .qa-tag-chip {
+  font: 600 11px/1 -apple-system, system-ui, sans-serif !important;
+  background: var(--qa-soft-2) !important;
+  color: var(--qa-fg) !important;
+  padding: 3px 8px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--qa-line) !important;
+}
+
 .qa-ext-ui .qa-icon-btn {
   background: transparent !important; border: 0 !important;
   width: 28px !important; height: 28px !important;
@@ -390,6 +587,35 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
   line-height: 1 !important;
 }
 .qa-ext-ui .qa-thumb-del:hover { background: var(--qa-danger) !important; color: #fff !important; }
+.qa-ext-ui .qa-thumb-annotate {
+  position: absolute !important; top: 4px !important; right: 28px !important;
+  background: rgba(255,255,255,0.92) !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  width: 20px !important; height: 20px !important;
+  cursor: pointer !important;
+  font: 700 12px inherit !important;
+  line-height: 1 !important;
+  color: var(--qa-fg) !important;
+}
+.qa-ext-ui .qa-thumb-annotate:hover { background: var(--qa-accent) !important; color: #fff !important; }
+
+/* Per-thumbnail annotation badges — surfaced at the top-left so the QA author
+   sees at a glance which screenshots already have pins / shapes attached. */
+.qa-ext-ui .qa-thumb-pin-badge,
+.qa-ext-ui .qa-thumb-annot-badge {
+  position: absolute !important;
+  top: 4px !important;
+  font: 600 10px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  background: var(--qa-accent) !important;
+  color: #fff !important;
+  padding: 2px 5px !important;
+  border-radius: 8px !important;
+  cursor: help !important;
+  z-index: 1 !important;
+}
+.qa-ext-ui .qa-thumb-pin-badge   { left: 26px !important; }
+.qa-ext-ui .qa-thumb-annot-badge { left: 56px !important; background: #6366f1 !important; }
 .qa-ext-ui .qa-thumb-meta {
   display: block !important;
   font: 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
@@ -493,3 +719,123 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
 }
 .qa-ext-ui.qa-bar .qa-bar-done:hover { background: var(--qa-accent-hover) !important; }
 .qa-ext-ui.qa-bar .qa-bar-done.qa-hidden { display: none !important; }
+
+/* ============== ANNOTATION EDITOR ============== */
+.qa-ext-ui.qa-annot-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(10, 16, 32, 0.85) !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  color: var(--qa-fg) !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-shell {
+  display: flex !important; flex-direction: column !important;
+  gap: 12px !important;
+  padding: 16px !important;
+  max-width: 95vw !important; max-height: 95vh !important;
+  background: #0f172a !important;
+  border-radius: 12px !important;
+  box-shadow: var(--qa-shadow) !important;
+  color: #e5e7eb !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-toolbar {
+  display: flex !important; align-items: center !important; gap: 12px !important;
+  flex-wrap: wrap !important;
+  background: #1e293b !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-tools {
+  display: inline-flex !important; gap: 4px !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-tools button,
+.qa-ext-ui.qa-annot-overlay .qa-annot-options button,
+.qa-ext-ui.qa-annot-overlay .qa-annot-footer button {
+  font: inherit !important;
+  padding: 6px 10px !important;
+  border-radius: 6px !important;
+  border: 1px solid #334155 !important;
+  background: #0f172a !important;
+  color: #e5e7eb !important;
+  cursor: pointer !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-tools button:hover,
+.qa-ext-ui.qa-annot-overlay .qa-annot-options button:hover {
+  border-color: var(--qa-accent) !important;
+  color: #fff !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-tools button.active,
+.qa-ext-ui.qa-annot-overlay .qa-annot-options button.active {
+  background: var(--qa-accent) !important;
+  border-color: var(--qa-accent) !important;
+  color: #fff !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-options {
+  display: inline-flex !important; gap: 8px !important; align-items: center !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-options input[type=text] {
+  font: inherit !important;
+  padding: 5px 8px !important;
+  background: #0f172a !important;
+  color: #e5e7eb !important;
+  border: 1px solid #334155 !important;
+  border-radius: 6px !important;
+  min-width: 140px !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-color-wrap {
+  display: inline-flex !important; align-items: center !important; gap: 6px !important;
+  font-size: 12px !important; color: #cbd5e1 !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-color {
+  width: 28px !important; height: 28px !important;
+  padding: 0 !important;
+  border: 1px solid #334155 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-stage {
+  position: relative !important;
+  background: #020617 !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  align-self: center !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-stage canvas {
+  position: absolute !important;
+  top: 0 !important; left: 0 !important;
+  width: 100% !important; height: 100% !important;
+  display: block !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-stage canvas.qa-annot-base { z-index: 1 !important; }
+.qa-ext-ui.qa-annot-overlay .qa-annot-stage canvas.qa-annot-draw {
+  z-index: 2 !important; cursor: crosshair !important;
+  touch-action: none !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-stage canvas.qa-annot-cursor {
+  z-index: 3 !important;
+  pointer-events: none !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-footer {
+  display: flex !important; align-items: center !important; gap: 8px !important;
+  background: #1e293b !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-spacer { flex: 1 !important; }
+.qa-ext-ui.qa-annot-overlay .qa-annot-status {
+  font-size: 12px !important; color: #94a3b8 !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-save {
+  background: var(--qa-accent) !important;
+  border-color: var(--qa-accent) !important;
+  color: #fff !important;
+}
+.qa-ext-ui.qa-annot-overlay .qa-annot-save:hover {
+  background: var(--qa-accent-hover) !important;
+  border-color: var(--qa-accent-hover) !important;
+}

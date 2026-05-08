@@ -26,7 +26,128 @@ const MSG = {
 
 const ISSUES_KEY = 'issues';
 const SETTINGS_KEY = 'settings';
-const DEFAULT_SETTINGS = { inspectorColor: '#ec4899' };
+
+// Default settings — expanded in v0.2.0 to cover capture preferences, privacy
+// redaction, capture-source toggles, issue defaults, integrations, inspector
+// behavior. readSettings() does a deep-merge on read so users with the v0.1.x
+// flat shape (`{ inspectorColor: '#xxx' }`) still get all the new fields with
+// safe defaults — no migration step required.
+const DEFAULT_SETTINGS = {
+  inspectorColor: '#ec4899',
+
+  mode: 'prod-bug',
+  modeChosenAt: null,
+
+  capture: {
+    openAnnotationEditor: true,
+    pinStyle: 'circle-number',
+    pinPrefix: '',
+    pinColorMode: 'accent',
+    defaultTool: 'pin',
+    padding: 80,
+    stitchingMaxSlices: 8,
+    autoCapture: true,
+    pngQuality: 'standard',
+    hideSelectorsBeforeCapture: []
+  },
+
+  privacy: {
+    blurSelectors: [
+      'input[type=password]',
+      'input[type=email]',
+      '[data-pii]'
+    ],
+    redactPatterns: [],
+    rrwebStripStorage: true,
+    hashUserIds: false,
+    rrwebAllowlistDomains: []
+  },
+
+  sources: {
+    computed: true,
+    source: true,
+    consoleErrors: false,
+    networkFailures: false,
+    a11y: false,
+    rrweb: false,
+    appState: false,
+    perfMetrics: false
+  },
+
+  defaults: {
+    severity: 'minor',
+    type: 'bug',
+    requiredFields: ['title', 'severity'],
+    titleTemplate: '',
+    severityColors: {
+      critical: '#ef4444',
+      major: '#f97316',
+      minor: '#eab308',
+      info: '#3b82f6'
+    },
+    autoTagRules: [],
+    severityHotkeys: { 1: 'critical', 2: 'major', 3: 'minor' }
+  },
+
+  integrations: {
+    jiraProjectKey: '',
+    jiraAssignee: '',
+    jiraLabels: [],
+    jiraParent: '',
+    slackWebhook: '',
+    githubRepo: '',
+    figmaToken: ''
+  },
+
+  inspector: {
+    thickness: 3,
+    style: 'solid',
+    showTooltip: true,
+    tooltipFields: ['tag', 'classes', 'computed', 'breakpoint'],
+    clickThrough: false,
+    domainBlocklist: [],
+    autoStopAfterPick: true,
+    shortcuts: { pick: 'click', multi: 'shift+click', done: 'Enter', stop: 'Escape' }
+  },
+
+  advanced: {
+    debugLogging: false
+  }
+};
+
+// Merge a partial settings patch into the current settings object, one level
+// deep — same shape as mergeSettings but on the *patch* side. Lets callers
+// send `{ capture: { padding: 40 } }` without losing capture.openAnnotationEditor.
+function deepShallow(patch) {
+  const out = {};
+  for (const [k, v] of Object.entries(patch || {})) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      out[k] = { ...(patch[k] || {}) };
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+// Deep-merge user settings on top of DEFAULT_SETTINGS. Arrays are replaced
+// (not concatenated) so when a user clears a list — e.g. `blurSelectors: []` —
+// the defaults don't sneak back in.
+function mergeSettings(stored) {
+  if (!stored || typeof stored !== 'object') return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  for (const [k, v] of Object.entries(stored)) {
+    if (v === null || v === undefined) continue;
+    if (Array.isArray(v) || typeof v !== 'object') {
+      out[k] = v;
+    } else {
+      // Nested object: shallow-merge per key, so a user who only saved
+      // capture.padding doesn't lose the rest of capture.*.
+      out[k] = { ...(out[k] || {}), ...v };
+    }
+  }
+  return out;
+}
 // Figma trees are stored under per-profile keys so we don't load every tree
 // when the active profile only needs one. Keys: figmaTree:<profileId>
 const FIGMA_TREE_KEY_PREFIX = 'figmaTree:';
@@ -92,7 +213,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         case MSG.SETTING_GET: return sendResponse(await readSettings());
         case MSG.SETTING_SET: {
-          const merged = { ...(await readSettings()), ...(message.payload || {}) };
+          // Deep-merge so a partial payload like `{ capture: { padding: 40 } }`
+          // doesn't wipe sibling keys under capture.*.
+          const merged = mergeSettings({ ...(await readSettings()), ...deepShallow(message.payload || {}) });
           await chrome.storage.local.set({ [SETTINGS_KEY]: merged });
           await broadcastSettings(merged);
           return sendResponse({ ok: true, settings: merged });
@@ -171,7 +294,7 @@ async function readIssues() {
 
 async function readSettings() {
   const data = await chrome.storage.local.get([SETTINGS_KEY]);
-  return { ...DEFAULT_SETTINGS, ...(data[SETTINGS_KEY] || {}) };
+  return mergeSettings(data[SETTINGS_KEY]);
 }
 
 // Strip fields the matcher can rebuild on demand. Saves ~40% storage.

@@ -13,13 +13,37 @@
     return t;
   }
 
+  const MODE_LABELS = {
+    'prod-bug':        'PROD bug',
+    'design-fidelity': 'Design',
+    'admin':           'Admin',
+    'a11y':            'A11y',
+    'i18n':            'i18n',
+    'custom':          'Custom'
+  };
+
   // Pull the saved theme color so popup UI (header link, primary button, focus
   // ring, hover accents) matches what the user sees in the inspector overlay.
+  // Also surface the active QA mode in the header chip so the user knows which
+  // capture sources / modal panels are wired right now.
   async function applyTheme() {
     const settings = await rpc({ type: MSG.SETTING_GET });
     const color = settings?.inspectorColor || '#ec4899';
     document.documentElement.style.setProperty('--qa-accent', color);
     document.documentElement.style.setProperty('--qa-accent-hover', darken(color, 0.10));
+
+    const chip = $('mode-chip');
+    if (chip) {
+      const mode = settings?.mode || 'custom';
+      chip.textContent = MODE_LABELS[mode] || mode;
+      chip.dataset.mode = mode;
+      // Build hover tooltip listing the auto-attach sources turned on by mode.
+      const src = settings?.sources || {};
+      const onSources = Object.entries(src).filter(([, v]) => v).map(([k]) => k);
+      chip.title = `Active mode: ${MODE_LABELS[mode] || mode}`
+        + (onSources.length ? `\nAuto-capture: ${onSources.join(', ')}` : '')
+        + '\nClick Settings → QA mode to change';
+    }
   }
   function darken(hex, amt) {
     const m = /^#([0-9a-f]{6})$/i.exec(hex);
@@ -54,6 +78,28 @@
     }
 
     $('count').textContent = String(issues?.length || 0);
+
+    // Pin summary — total numbered pins across every issue's screenshots.
+    let totalPins = 0;
+    let totalAnnotated = 0;
+    for (const i of issues || []) {
+      for (const s of (i.screenshots || [])) {
+        const layers = s.annotations?.layers || [];
+        if (layers.length) totalAnnotated++;
+        for (const l of layers) if (l.type === 'pin') totalPins++;
+      }
+    }
+    const pinEl = $('pin-count');
+    if (pinEl) {
+      if (totalPins > 0) {
+        pinEl.hidden = false;
+        pinEl.textContent = `${totalPins} pin${totalPins === 1 ? '' : 's'}`;
+        pinEl.title = `${totalPins} numbered pins across ${totalAnnotated} annotated screenshot${totalAnnotated === 1 ? '' : 's'}`;
+      } else {
+        pinEl.hidden = true;
+      }
+    }
+
     $('active-info').textContent = active ? `Active: ${active.id}` : 'No active profile';
 
     // Inspector state from content

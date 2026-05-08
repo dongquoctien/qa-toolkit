@@ -10,7 +10,7 @@ Two pieces, one repo:
 
 | Piece | What it is | Audience |
 |---|---|---|
-| **Chrome extension** (this repo, root) | Inspector overlay + form modal + ZIP export. Multi-pick (shift-click), auto-cropped screenshots with red border, multi-image gallery, auto-filled Figma links via tree matcher. | QA engineers |
+| **Chrome extension** (this repo, root) | Inspector overlay + form modal + ZIP export. Multi-pick (shift-click), auto-cropped screenshots, **canvas annotation editor** (numbered pin / arrow / rect / blur / text / freehand), **6 QA modes** (PROD-bug / Design-fidelity / Admin / A11y / i18n / Custom), **console + network capture**, **axe-core a11y scan**, multi-image gallery, auto-filled Figma links. | QA engineers |
 | **Claude Code plugin** ([`plugins/qa-tooling/`](plugins/qa-tooling/README.md)) | `/qa:init` auto-detects project stack and generates `qa-profile.json`. `/qa:figma-sync` crawls Figma file. `/qa:sync` pushes QA reports into Jira via MCP. | Dev / QA leads |
 
 Both pieces share two JSON files: **`qa-profile.json`** (project conventions) and **`qa-figma-tree.json`** (cached Figma frame tree). Plugin generates them; extension consumes them.
@@ -111,9 +111,18 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ---
 
+## What's new in v0.2.0 (2026-05-08)
+
+- **6 QA modes** (PROD bug / Design fidelity / Admin / A11y / i18n / Custom) — picker in Settings auto-toggles capture sources + filters which Settings cards are visible to keep the UI focused per workflow.
+- **Annotation editor** opens after capture: drop **numbered pins** (auto-increment), draw **rectangles** (red=bug / green=expected / accent=info), arrows, text callouts, blur for PII, freehand pen. Undo / Redo. Re-editable from saved issues.
+- **Console + network capture** — page-world ring buffer attaches the last 50 console errors + 20 failed requests + browser env to each issue (toggleable per mode). Privacy redact patterns scrub bodies before storage.
+- **Accessibility scan** — bundled axe-core runs scoped to the picked element; violations + WCAG SC + helpUrl render in the modal. Inspector tooltip shows live contrast ratio in a11y mode.
+- **Issue defaults** — title template substitution, URL-regex auto-tags, severity hotkeys (1/2/3/4), required-field validation gate.
+- **Mode + pin count UX** — popup + modal headers show active mode chip and total pin count. Per-thumbnail pin/annotation badges.
+
 ## Status
 
-- **Extension** Phase 1 complete and tested live in Chrome against the about-us project.
+- **Extension** v0.2.0 — Phase 1 + Sprint 1 (mode-aware QA workflow, annotation editor, runtime capture, a11y scan) complete and tested live in Chrome.
 - **Plugin** Phase 1 complete; `/qa:init`, `/qa:doctor`, `/qa:figma-sync` exercised live against about-us; `/qa:sync` spec done but not yet exercised against a real Jira workspace.
 
-Phase 2 ideas listed in [`STATUS.md`](STATUS.md#-not-built-phase-2).
+Phase 2 (mode-aware modal panels for runtime context / app-state / a11y findings / i18n findings) listed in [`STATUS.md`](STATUS.md#-not-built-phase-2).

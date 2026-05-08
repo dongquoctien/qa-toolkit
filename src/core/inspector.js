@@ -16,6 +16,7 @@
   let onPickCallback = null;     // (element) called on plain click
   let onMultiChange = null;      // (count) called when picked set grows/shrinks
   let lastHover = null;
+  let activeMode = null;         // 'a11y' enables the contrast badge in the tooltip
   const picked = new Set();
   const ringEls = new WeakMap(); // element -> outline DIV
 
@@ -119,7 +120,13 @@
     const sec = el.closest('[data-section]');
     const secLabel = sec ? `  ⌗${sec.getAttribute('data-section')}` : '';
     const pickedHint = picked.size ? `  · shift+click to add (${picked.size})` : '  · shift+click to add';
-    return `${tag}${id}${cls}${secLabel}${pickedHint}`;
+    // a11y mode: prepend a quick contrast badge — 0.1 ms on hover, no axe call.
+    let a11yBadge = '';
+    if (activeMode === 'a11y' && self.QA?.a11yScan?.quickContrast) {
+      const c = self.QA.a11yScan.quickContrast(el);
+      if (c) a11yBadge = ` ${c.fail ? '✗' : '✓'} ${c.ratio}:1  `;
+    }
+    return `${a11yBadge}${tag}${id}${cls}${secLabel}${pickedHint}`;
   }
 
   function isInExtensionUI(el) {
@@ -216,8 +223,12 @@
 
   function isActive() { return active; }
   function getPickedCount() { return picked.size; }
+  // setMode is called by content.js on init + on settings change. Currently
+  // only the 'a11y' value affects rendering (contrast badge in tooltip), but
+  // the hook is here so other modes can light up their own affordances later.
+  function setMode(mode) { activeMode = mode || null; }
 
   const target = (typeof self !== 'undefined' ? self : window);
   target.QA = target.QA || {};
-  target.QA.inspector = { start, stop, isActive, commitAndPick, getPickedCount };
+  target.QA.inspector = { start, stop, isActive, commitAndPick, getPickedCount, setMode };
 })();

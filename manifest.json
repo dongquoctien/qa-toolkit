@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "QA Annotator",
   "short_name": "QA Annotator",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "Click any element on any website to log QA/QC issues. Project-aware via Profiles. Exports JSON/Markdown/ZIP for Claude + Jira sync.",
 
   "minimum_chrome_version": "114",
@@ -57,6 +57,9 @@
         "src/lib/viewport-detector.js",
         "src/lib/figma-matcher.js",
         "src/lib/messages.js",
+        "src/content/runtime-bridge.js",
+        "src/vendor/axe.min.js",
+        "src/lib/a11y-scan.js",
         "src/core/unique-selector.js",
         "src/core/computed-styles.js",
         "src/core/id-generator.js",
@@ -65,6 +68,7 @@
         "src/adapters/adapter-registry.js",
         "src/core/issue-builder.js",
         "src/core/inspector.js",
+        "src/core/annotation-editor.js",
         "src/core/form-modal.js",
         "src/core/screenshot.js",
         "src/content/overlay.js",
@@ -81,7 +85,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "src/profile/built-in/*.json"
+        "src/profile/built-in/*.json",
+        "src/lib/runtime-buffer.js"
       ],
       "matches": ["<all_urls>"]
     }

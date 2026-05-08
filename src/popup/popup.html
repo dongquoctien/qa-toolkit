@@ -8,6 +8,7 @@
 <body>
   <header>
     <strong>QA Annotator</strong>
+    <span id="mode-chip" class="mode-chip" title="Click Settings to change">—</span>
     <a href="#" id="open-settings">Settings</a>
   </header>
 
@@ -21,7 +22,10 @@
   </section>
 
   <section class="row row-stats">
-    <span class="count">Issues: <strong id="count">0</strong></span>
+    <span class="count">
+      Issues: <strong id="count">0</strong>
+      <span id="pin-count" class="pin-summary" hidden></span>
+    </span>
     <span class="exports">
       <button id="export-json" title="Export JSON">JSON</button>
       <button id="export-md" title="Export Markdown">MD</button>

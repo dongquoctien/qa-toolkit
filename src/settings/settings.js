@@ -259,7 +259,7 @@
     tbody.innerHTML = '';
     if (issues.length === 0) {
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="7" class="muted" style="text-align:center;padding:16px">No saved issues yet.</td>';
+      tr.innerHTML = '<td colspan="8" class="muted" style="text-align:center;padding:16px">No saved issues yet.</td>';
       tbody.appendChild(tr);
       return;
     }
@@ -270,6 +270,22 @@
       const vpStr = vp.w ? `${vp.w}×${vp.h}${bp.label ? ` (${bp.label})` : ''}` : '—';
       const pageSec = [i.page, i.section].filter(Boolean).join(' · ') || '—';
       const savedAt = (i.updatedAt || i.createdAt || '').slice(0, 10) || '—';
+
+      // Annotation summary — pins + other layers across all screenshots.
+      let pinTotal = 0, annotTotal = 0, shotsAnnot = 0;
+      for (const s of (i.screenshots || [])) {
+        const layers = s?.annotations?.layers || [];
+        if (layers.length) shotsAnnot++;
+        for (const l of layers) {
+          if (l.type === 'pin') pinTotal++; else annotTotal++;
+        }
+      }
+      const annotCell = (pinTotal + annotTotal) > 0
+        ? `${pinTotal > 0 ? `<span class="tag" title="${pinTotal} numbered pins">📍 ${pinTotal}</span>` : ''}${annotTotal > 0 ? ` <span class="tag" title="${annotTotal} other shapes (rect/arrow/text/blur)">✦ ${annotTotal}</span>` : ''}<small class="muted" style="margin-left:4px">${shotsAnnot}/${(i.screenshots || []).length} shot${(i.screenshots || []).length === 1 ? '' : 's'}</small>`
+        : (i.screenshots || []).length > 0
+            ? `<span class="muted">— <small>${(i.screenshots || []).length} raw</small></span>`
+            : '<span class="muted">—</span>';
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><code>${escapeHtml(i.id)}</code></td>
@@ -277,6 +293,7 @@
         <td><span class="tag">${escapeHtml(i.severity || '—')}</span></td>
         <td>${escapeHtml(pageSec)}</td>
         <td><code>${escapeHtml(vpStr)}</code></td>
+        <td>${annotCell}</td>
         <td>${escapeHtml(savedAt)}</td>
         <td class="actions">
           <button data-act="issue-edit" data-id="${escapeAttr(i.id)}">Edit</button>
@@ -298,6 +315,9 @@
       const result = await QA.formModal.open(issue, {
         // No source DOM element here — Recapture would be meaningless.
         disableRecapture: true,
+        // Pass live settings so the annotation editor uses the right pin
+        // style / color / default tool when re-editing on the settings page.
+        settings: _liveSettings,
         onPasteFromClipboard: async () => {
           try {
             const items = await navigator.clipboard.read();
@@ -455,7 +475,333 @@
     });
   }
 
+  // ============== Settings — generic binding for [data-setting] elements ==============
+  // Each element with data-setting="capture.padding" reads/writes that path on
+  // chrome.storage.local["settings"]. Type coercion is automatic from input type
+  // and an optional data-shape attribute ("csv-list" | "json").
+  let _liveSettings = null;
+
+  function getPath(obj, path) {
+    return path.split('.').reduce((cur, k) => (cur == null ? cur : cur[k]), obj);
+  }
+  function setPath(obj, path, value) {
+    const parts = path.split('.');
+    let cur = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const k = parts[i];
+      if (cur[k] == null || typeof cur[k] !== 'object') cur[k] = {};
+      cur = cur[k];
+    }
+    cur[parts[parts.length - 1]] = value;
+  }
+
+  function readFieldValue(el) {
+    const shape = el.getAttribute('data-shape');
+    if (shape === 'csv-list') {
+      return el.value.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    if (shape === 'json') {
+      const raw = el.value.trim();
+      if (!raw) return [];
+      try { return JSON.parse(raw); } catch { return []; }
+    }
+    if (el.type === 'checkbox') return el.checked;
+    if (el.type === 'number') return el.value === '' ? null : Number(el.value);
+    if (el.tagName === 'SELECT') {
+      const v = el.value;
+      if (v === 'true')  return true;
+      if (v === 'false') return false;
+      const n = Number(v);
+      return Number.isFinite(n) && /^-?\d+(\.\d+)?$/.test(v) ? n : v;
+    }
+    return el.value;
+  }
+
+  function writeFieldValue(el, value) {
+    const shape = el.getAttribute('data-shape');
+    if (shape === 'csv-list') {
+      el.value = Array.isArray(value) ? value.join(', ') : (value || '');
+      return;
+    }
+    if (shape === 'json') {
+      el.value = value == null ? '' : JSON.stringify(value);
+      return;
+    }
+    if (el.type === 'checkbox') { el.checked = !!value; return; }
+    if (el.tagName === 'SELECT') { el.value = String(value); return; }
+    el.value = value == null ? '' : String(value);
+  }
+
+  function bindFieldHandlers() {
+    document.querySelectorAll('[data-setting]').forEach((el) => {
+      const evt = (el.tagName === 'SELECT' || el.type === 'checkbox') ? 'change' : 'input';
+      el.addEventListener(evt, async () => {
+        const path = el.getAttribute('data-setting');
+        const value = readFieldValue(el);
+        const patch = {};
+        setPath(patch, path, value);
+        // For nested keys we need to send the object root, not the nested key.
+        // setPath builds patch.capture.padding = 40; but the SETTING_SET handler
+        // does deepShallow at the root level, so this works.
+        const r = await rpc({ type: MSG.SETTING_SET, payload: patch });
+        if (r?.settings) _liveSettings = r.settings;
+      });
+    });
+  }
+
+  function applySettingsToFields(settings) {
+    document.querySelectorAll('[data-setting]').forEach((el) => {
+      const path = el.getAttribute('data-setting');
+      const v = getPath(settings, path);
+      if (v !== undefined) writeFieldValue(el, v);
+    });
+  }
+
+  // ============== Mode picker ==============
+  // Each mode declares (a) capture-source presets, (b) which cards are "primary"
+  // (highlighted + expanded), (c) a short helper-banner sentence so the user
+  // knows why some cards are hidden.
+  const MODES = {
+    'prod-bug': {
+      label: 'PROD bug capture',
+      hint: 'Showing the cards most useful for live-site bugs: Capture · Privacy · Sources · Defaults · Inspector · Integrations.',
+      sources: { computed: true, source: true, consoleErrors: true, networkFailures: true, a11y: false },
+      primary: ['capture', 'privacy', 'sources']
+    },
+    'design-fidelity': {
+      label: 'Design fidelity',
+      hint: 'Showing the cards most useful for Figma comparison: Figma tree · Capture · Sources · Integrations.',
+      sources: { computed: true, source: true, consoleErrors: false, networkFailures: false, a11y: false },
+      primary: ['figma', 'capture']
+    },
+    admin: {
+      label: 'Admin / CMS',
+      hint: 'Showing the cards most useful for admin systems: Privacy is highlighted because admin pages often render real customer data.',
+      sources: { computed: true, source: true, consoleErrors: true, networkFailures: true, a11y: false, appState: true },
+      primary: ['privacy', 'capture', 'sources']
+    },
+    a11y: {
+      label: 'Accessibility audit',
+      hint: 'Showing the cards most useful for a11y audits: Capture · Sources (axe-core) · Defaults · Inspector.',
+      sources: { computed: true, source: true, a11y: true },
+      primary: ['sources']
+    },
+    i18n: {
+      label: 'Localization (i18n / RTL)',
+      hint: 'Showing the cards most useful for localization QA. Pseudolocale + RTL toggles ship in Sprint 2.',
+      sources: { computed: true, source: true },
+      primary: ['capture', 'defaults']
+    },
+    custom: {
+      label: 'Custom',
+      hint: 'Showing every card. Use this when you want to fine-tune each toggle yourself.',
+      sources: {}, // user picks
+      primary: []
+    }
+  };
+
+  // Lookup by section heading ("Capture preferences" → "capture") so we don't
+  // have to add ids to every card.
+  const CARD_KEYS = {
+    'Capture preferences': 'capture',
+    'Privacy & redaction': 'privacy',
+    'Capture sources': 'sources',
+    'Issue defaults': 'defaults',
+    'Integrations': 'integrations',
+    'Inspector behavior': 'inspector',
+    'Figma frame tree': 'figma'
+  };
+
+  function bindModePicker() {
+    const grid = document.querySelector('#mode-grid');
+    if (!grid) return;
+    grid.addEventListener('change', async (e) => {
+      const radio = e.target.closest('input[name=qa-mode]');
+      if (!radio) return;
+      const mode = radio.value;
+      const def = MODES[mode] || {};
+      const next = {
+        mode,
+        modeChosenAt: new Date().toISOString(),
+        ...(def.sources ? { sources: def.sources } : {})
+      };
+      const r = await rpc({ type: MSG.SETTING_SET, payload: next });
+      if (r?.settings) {
+        _liveSettings = r.settings;
+        applySettingsToFields(r.settings);
+        markActiveMode(mode);
+        applyModeVisibility(mode);
+      }
+    });
+  }
+
+  function markActiveMode(mode) {
+    document.querySelectorAll('.mode-tile').forEach((tile) => {
+      const radio = tile.querySelector('input[name=qa-mode]');
+      const checked = radio && radio.value === mode;
+      if (radio) radio.checked = checked;
+      tile.classList.toggle('checked', !!checked);
+    });
+    const badge = document.querySelector('#mode-badge');
+    if (badge) {
+      if (mode) {
+        const def = MODES[mode];
+        badge.textContent = def?.label || mode;
+        badge.hidden = false;
+      } else {
+        badge.hidden = true;
+      }
+    }
+  }
+
+  // ============== Mode-scoped UI visibility ==============
+  // Every element with `data-modes="prod-bug,custom"` is shown only when the
+  // active mode appears in that list. Cards listed in MODES[mode].primary get
+  // the .qa-mode-primary highlight + start expanded. Other matching cards are
+  // shown but collapsed by default — user can click the header to expand. The
+  // mode picker, theme color, profiles and saved-issues cards have no
+  // data-modes attribute and are always visible.
+  function applyModeVisibility(mode) {
+    const def = MODES[mode] || MODES.custom;
+    const primarySet = new Set(def.primary || []);
+
+    document.querySelectorAll('[data-modes]').forEach((el) => {
+      const allow = (el.getAttribute('data-modes') || '').split(',').map((s) => s.trim());
+      const visible = allow.includes(mode);
+      el.classList.toggle('qa-mode-hidden', !visible);
+    });
+
+    document.querySelectorAll('section.card').forEach((card) => {
+      const h2 = card.querySelector(':scope > h2');
+      const heading = h2 ? h2.firstChild?.textContent?.trim() : '';
+      const key = CARD_KEYS[heading];
+      const isPrimary = key && primarySet.has(key);
+      card.classList.toggle('qa-mode-primary', !!isPrimary);
+
+      // Custom mode = expand everything. Otherwise: primary cards expanded,
+      // non-primary mode-conditional cards collapsed.
+      if (mode === 'custom') {
+        card.classList.remove('qa-collapsed');
+      } else if (card.hasAttribute('data-modes') && !card.classList.contains('qa-mode-hidden')) {
+        if (isPrimary) card.classList.remove('qa-collapsed');
+        else card.classList.add('qa-collapsed');
+      }
+    });
+
+    // Hint banner
+    const hint = document.getElementById('mode-hint');
+    if (hint) {
+      if (mode === 'custom' || !def.hint) {
+        hint.classList.remove('show');
+        hint.textContent = '';
+      } else {
+        hint.innerHTML = `<strong>${def.label}</strong> — ${def.hint} <a id="mode-show-all">Show all cards</a>`;
+        hint.classList.add('show');
+        const showAll = document.getElementById('mode-show-all');
+        if (showAll) {
+          showAll.addEventListener('click', () => {
+            document.querySelectorAll('[data-modes].qa-mode-hidden').forEach((el) => el.classList.remove('qa-mode-hidden'));
+            document.querySelectorAll('section.card.qa-collapsed').forEach((c) => c.classList.remove('qa-collapsed'));
+            hint.classList.remove('show');
+          });
+        }
+      }
+    }
+  }
+
+  // Click card heading to toggle collapse — works on every card except
+  // mode-card (which has its own cursor:default rule).
+  function bindCardCollapse() {
+    document.querySelectorAll('section.card').forEach((card) => {
+      if (card.id === 'mode-card') return;
+      const h2 = card.querySelector(':scope > h2');
+      if (!h2) return;
+      h2.addEventListener('click', () => card.classList.toggle('qa-collapsed'));
+    });
+  }
+
+  // ============== Advanced — export / import / reset / storage usage ==============
+  function downloadJson(filename, obj) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function bindAdvanced() {
+    const exportBtn = $('settings-export');
+    const importBtn = $('settings-import');
+    const importFile = $('settings-import-file');
+    const resetBtn = $('settings-reset');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', async () => {
+        const s = await rpc({ type: MSG.SETTING_GET });
+        downloadJson('qa-annotator-settings.json', s);
+      });
+    }
+    if (importBtn && importFile) {
+      importBtn.addEventListener('click', () => importFile.click());
+      importFile.addEventListener('change', async () => {
+        const f = importFile.files?.[0];
+        if (!f) return;
+        try {
+          const parsed = JSON.parse(await f.text());
+          await rpc({ type: MSG.SETTING_SET, payload: parsed });
+          await loadAllSettings();
+          alert('✓ Settings imported.');
+        } catch (e) {
+          alert('Import failed: ' + (e?.message || e));
+        }
+        importFile.value = '';
+      });
+    }
+    if (resetBtn) {
+      resetBtn.addEventListener('click', async () => {
+        if (!confirm('Reset all settings to defaults? Theme color is preserved.')) return;
+        // Send a payload that clears the user-saved object. The service-worker's
+        // mergeSettings() will fill DEFAULTS for any missing key.
+        const current = await rpc({ type: MSG.SETTING_GET });
+        const reset = { inspectorColor: current?.inspectorColor || '#ec4899' };
+        await chrome.storage.local.set({ settings: reset });
+        await loadAllSettings();
+        alert('✓ Settings reset.');
+      });
+    }
+    refreshStorageUsage();
+  }
+
+  async function refreshStorageUsage() {
+    const usage = $('storage-usage');
+    const ver = $('settings-version');
+    try {
+      const all = await chrome.storage.local.get(null);
+      const bytes = JSON.stringify(all).length;
+      if (usage) usage.textContent = `Storage: ~${(bytes / 1024).toFixed(1)} KB used (chrome.storage.local).`;
+    } catch {
+      if (usage) usage.textContent = 'Storage usage unavailable.';
+    }
+    try {
+      const m = chrome.runtime.getManifest();
+      if (ver) ver.textContent = `Extension v${m.version} · min Chrome ${m.minimum_chrome_version}`;
+    } catch {}
+  }
+
+  async function loadAllSettings() {
+    const settings = await rpc({ type: MSG.SETTING_GET });
+    _liveSettings = settings;
+    applySettingsToFields(settings);
+    markActiveMode(settings?.mode);
+    applyModeVisibility(settings?.mode || 'custom');
+  }
+
+  bindFieldHandlers();
+  bindModePicker();
+  bindCardCollapse();
+  bindAdvanced();
   await loadColor();
+  await loadAllSettings();
   await refresh();
   await refreshIssues();
   await refreshTrees();

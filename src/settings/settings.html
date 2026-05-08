@@ -30,6 +30,60 @@
     </p>
   </header>
 
+  <div id="mode-hint" class="qa-mode-hint" role="status"></div>
+
+  <section class="card" id="mode-card">
+    <h2>QA mode <span id="mode-badge" class="tag" hidden></span></h2>
+    <p>
+      Pick the workflow that matches how you'll mainly use this extension. Each mode toggles the
+      right capture sources and modal panels by default — you can fine-tune below.
+    </p>
+    <div id="mode-grid" class="mode-grid" role="radiogroup" aria-label="QA mode">
+      <label class="mode-tile">
+        <input type="radio" name="qa-mode" value="prod-bug" />
+        <div class="mode-tile-body">
+          <strong>PROD bug capture</strong>
+          <span>Live site issues — console errors + network failures attached, Figma block hidden.</span>
+        </div>
+      </label>
+      <label class="mode-tile">
+        <input type="radio" name="qa-mode" value="design-fidelity" />
+        <div class="mode-tile-body">
+          <strong>Design fidelity</strong>
+          <span>Compare implementation vs Figma. Token suggestions (Sprint 2).</span>
+        </div>
+      </label>
+      <label class="mode-tile">
+        <input type="radio" name="qa-mode" value="admin" />
+        <div class="mode-tile-body">
+          <strong>Admin / CMS</strong>
+          <span>Internal tools. App-state row in modal, console + network on.</span>
+        </div>
+      </label>
+      <label class="mode-tile">
+        <input type="radio" name="qa-mode" value="a11y" />
+        <div class="mode-tile-body">
+          <strong>Accessibility audit</strong>
+          <span>axe-core scan on pick. Contrast badge always visible.</span>
+        </div>
+      </label>
+      <label class="mode-tile">
+        <input type="radio" name="qa-mode" value="i18n" />
+        <div class="mode-tile-body">
+          <strong>Localization (i18n / RTL)</strong>
+          <span>Pseudolocale + RTL toggles in popup (Sprint 2).</span>
+        </div>
+      </label>
+      <label class="mode-tile">
+        <input type="radio" name="qa-mode" value="custom" />
+        <div class="mode-tile-body">
+          <strong>Custom</strong>
+          <span>I'll configure each toggle myself.</span>
+        </div>
+      </label>
+    </div>
+  </section>
+
   <section class="card">
     <h2>Import profile</h2>
     <p>Upload a <code>qa-profile.json</code> file (or paste JSON). It will be validated and saved.</p>
@@ -54,7 +108,7 @@
     </table>
   </section>
 
-  <section class="card">
+  <section class="card" data-modes="design-fidelity,custom">
     <h2>Figma frame tree</h2>
     <p>
       The plugin produces <code>docs/qa/qa-figma-tree.json</code> via <code>/qa:figma-sync</code>.
@@ -92,9 +146,274 @@
       <span id="report-status" class="muted"></span>
     </div>
     <table id="issues">
-      <thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Page · Section</th><th>Viewport</th><th>Saved</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Page · Section</th><th>Viewport</th><th>Annotations</th><th>Saved</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
+  </section>
+
+  <section class="card" data-modes="prod-bug,design-fidelity,admin,a11y,i18n,custom">
+    <h2>Inspector behavior</h2>
+    <div class="grid-2">
+      <label class="field">
+        <span>Highlight thickness (px)</span>
+        <input type="number" data-setting="inspector.thickness" min="1" max="8" />
+      </label>
+      <label class="field">
+        <span>Highlight style</span>
+        <select data-setting="inspector.style">
+          <option value="solid">Solid</option>
+          <option value="dashed">Dashed</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Show tooltip</span>
+        <select data-setting="inspector.showTooltip">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Auto-stop after pick</span>
+        <select data-setting="inspector.autoStopAfterPick">
+          <option value="true">Yes (default)</option>
+          <option value="false">No (continuous picking)</option>
+        </select>
+      </label>
+      <label class="field span-2">
+        <span>Domain blocklist <small class="muted">(comma-separated, inspector won't start on these)</small></span>
+        <input type="text" data-setting="inspector.domainBlocklist" data-shape="csv-list" placeholder="banking.com, mail.example.com" />
+      </label>
+    </div>
+  </section>
+
+  <section class="card" data-modes="prod-bug,design-fidelity,admin,a11y,i18n,custom">
+    <h2>Capture preferences</h2>
+    <p>Control the auto-capture pipeline — what's visible, what's hidden, how big.</p>
+    <div class="grid-2">
+      <label class="field">
+        <span>After capture</span>
+        <select data-setting="capture.openAnnotationEditor">
+          <option value="true">Open annotation editor</option>
+          <option value="false">Save raw crop directly</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Pin style</span>
+        <select data-setting="capture.pinStyle">
+          <option value="circle-number">Circle (1, 2, 3)</option>
+          <option value="square-number">Square (1, 2, 3)</option>
+          <option value="letter">Letter (A, B, C)</option>
+          <option value="prefix">Prefix + number (BUG-1)</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Pin prefix</span>
+        <input type="text" data-setting="capture.pinPrefix" placeholder="BUG-" maxlength="8" />
+      </label>
+      <label class="field">
+        <span>Pin color</span>
+        <select data-setting="capture.pinColorMode">
+          <option value="accent">Theme accent</option>
+          <option value="severity">By issue severity</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Default tool</span>
+        <select data-setting="capture.defaultTool">
+          <option value="pin">Numbered pin</option>
+          <option value="rect">Rectangle</option>
+          <option value="arrow">Arrow</option>
+          <option value="text">Text callout</option>
+          <option value="blur">Blur (PII)</option>
+          <option value="freehand">Freehand</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Padding around element (px)</span>
+        <input type="number" data-setting="capture.padding" min="0" max="400" step="20" />
+      </label>
+      <label class="field">
+        <span>Stitching: max viewport slices</span>
+        <input type="number" data-setting="capture.stitchingMaxSlices" min="1" max="20" />
+      </label>
+      <label class="field">
+        <span>Auto-capture on pick</span>
+        <select data-setting="capture.autoCapture">
+          <option value="true">Yes — capture immediately</option>
+          <option value="false">No — manual button</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>PNG quality</span>
+        <select data-setting="capture.pngQuality">
+          <option value="low">Low (smaller files)</option>
+          <option value="standard">Standard</option>
+          <option value="high">High</option>
+        </select>
+      </label>
+      <label class="field span-2">
+        <span>Hide selectors before capture <small class="muted">(comma-separated CSS, e.g. <code>#hubspot-chat, .cookie-consent</code>)</small></span>
+        <input type="text" data-setting="capture.hideSelectorsBeforeCapture" data-shape="csv-list" placeholder="#hubspot-chat, .cookie-consent" />
+      </label>
+    </div>
+  </section>
+
+  <section class="card" data-modes="prod-bug,admin,custom">
+    <h2>Privacy &amp; redaction</h2>
+    <p>
+      Critical for admin systems and PROD pages with real customer data. Auto-blur PII inputs in
+      screenshots and redact sensitive patterns from console logs / network bodies.
+    </p>
+    <div class="grid-2">
+      <label class="field span-2">
+        <span>Auto-blur selectors <small class="muted">(comma-separated CSS — these get a blur overlay in screenshots)</small></span>
+        <input type="text" data-setting="privacy.blurSelectors" data-shape="csv-list" />
+      </label>
+      <label class="field span-2">
+        <span>Redact text patterns <small class="muted">(comma-separated regex, e.g. <code>\b\d{16}\b, \w+@\w+\.\w+</code>)</small></span>
+        <input type="text" data-setting="privacy.redactPatterns" data-shape="csv-list" />
+      </label>
+      <label class="field">
+        <span>Strip cookies / localStorage from rrweb</span>
+        <select data-setting="privacy.rrwebStripStorage">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Hash user IDs in app-state</span>
+        <select data-setting="privacy.hashUserIds">
+          <option value="false">No</option>
+          <option value="true">Yes (SHA-256 prefix)</option>
+        </select>
+      </label>
+      <label class="field span-2">
+        <span>rrweb domain allowlist <small class="muted">(only record on these — leave blank to record everywhere)</small></span>
+        <input type="text" data-setting="privacy.rrwebAllowlistDomains" data-shape="csv-list" placeholder="staging.example.com, qa.example.com" />
+      </label>
+    </div>
+  </section>
+
+  <section class="card" data-modes="prod-bug,design-fidelity,admin,a11y,i18n,custom">
+    <h2>Capture sources</h2>
+    <p>Pick what gets auto-attached to every issue at pick time. Each source has a perf / privacy / file-size cost.</p>
+    <div class="sources-grid">
+      <label class="src-row">
+        <input type="checkbox" data-setting="sources.computed" />
+        <strong>Computed CSS</strong>
+        <span>Already on. font-size, color, padding, etc. read from the picked element.</span>
+      </label>
+      <label class="src-row">
+        <input type="checkbox" data-setting="sources.source" />
+        <strong>Source <code>file:line</code></strong>
+        <span>Astro source map (when project enables it). Plugin output path.</span>
+      </label>
+      <label class="src-row">
+        <input type="checkbox" data-setting="sources.consoleErrors" />
+        <strong>Console errors <small class="muted">(last 50)</small></strong>
+        <span>Captures <code>console.error</code> + <code>console.warn</code>. World MAIN inject.</span>
+      </label>
+      <label class="src-row">
+        <input type="checkbox" data-setting="sources.networkFailures" />
+        <strong>Network failures <small class="muted">(last 20, status &ge; 400)</small></strong>
+        <span>fetch + XHR. Bodies redacted via privacy.redactPatterns.</span>
+      </label>
+      <label class="src-row">
+        <input type="checkbox" data-setting="sources.a11y" />
+        <strong>Accessibility scan <small class="muted">(axe-core)</small></strong>
+        <span>Runs on the picked element subtree. Adds the A11y tab in the modal.</span>
+      </label>
+      <label class="src-row src-disabled">
+        <input type="checkbox" data-setting="sources.rrweb" disabled />
+        <strong>rrweb pre-roll <small class="muted">(10s)</small> <span class="tag">Sprint 2</span></strong>
+        <span>Replayable DOM mutations + console + network. ~120 KB bundle.</span>
+      </label>
+      <label class="src-row src-disabled" data-modes="admin,custom">
+        <input type="checkbox" data-setting="sources.appState" disabled />
+        <strong>App state <span class="tag">Sprint 2</span></strong>
+        <span>Active route + role + open modal data-id + table sort/filter (admin systems).</span>
+      </label>
+      <label class="src-row src-disabled">
+        <input type="checkbox" data-setting="sources.perfMetrics" disabled />
+        <strong>Performance <span class="tag">Sprint 2</span></strong>
+        <span>LCP / CLS / TBT at pick time via PerformanceObserver.</span>
+      </label>
+    </div>
+  </section>
+
+  <section class="card" data-modes="prod-bug,design-fidelity,admin,a11y,i18n,custom">
+    <h2>Issue defaults</h2>
+    <p>Pre-fill new issues. Title template uses <code>{{section}}</code>, <code>{{page}}</code>, <code>{{viewport}}</code>, <code>{{tag}}</code>.</p>
+    <div class="grid-2">
+      <label class="field">
+        <span>Default severity</span>
+        <select data-setting="defaults.severity">
+          <option value="critical">critical</option>
+          <option value="major">major</option>
+          <option value="minor">minor</option>
+          <option value="info">info</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Default issue type</span>
+        <select data-setting="defaults.type">
+          <option value="visual">visual</option>
+          <option value="content">content</option>
+          <option value="i18n">i18n</option>
+          <option value="a11y">a11y</option>
+          <option value="interactive">interactive</option>
+          <option value="broken">broken</option>
+          <option value="bug">bug</option>
+        </select>
+      </label>
+      <label class="field span-2">
+        <span>Title template</span>
+        <input type="text" data-setting="defaults.titleTemplate" placeholder="[{{section}}] " />
+      </label>
+      <label class="field span-2">
+        <span>Required fields before save <small class="muted">(comma-separated: title, severity, expected, screenshot)</small></span>
+        <input type="text" data-setting="defaults.requiredFields" data-shape="csv-list" placeholder="title, severity" />
+      </label>
+      <label class="field span-2">
+        <span>Auto-tag rules <small class="muted">(JSON array: <code>[{"pattern":"/admin/","tag":"area:admin"}]</code>)</small></span>
+        <input type="text" data-setting="defaults.autoTagRules" data-shape="json" placeholder='[{"pattern":"/admin/","tag":"area:admin"}]' />
+      </label>
+    </div>
+  </section>
+
+  <section class="card" data-modes="prod-bug,design-fidelity,admin,custom">
+    <h2>Integrations</h2>
+    <p>Optional overrides on top of the active profile. Empty = inherit from profile.</p>
+    <div class="grid-2">
+      <label class="field">
+        <span>Jira project key</span>
+        <input type="text" data-setting="integrations.jiraProjectKey" placeholder="ELS" />
+      </label>
+      <label class="field">
+        <span>Jira default assignee</span>
+        <input type="text" data-setting="integrations.jiraAssignee" placeholder="dev.vn@…" />
+      </label>
+      <label class="field">
+        <span>Jira default parent</span>
+        <input type="text" data-setting="integrations.jiraParent" placeholder="ELS-1234" />
+      </label>
+      <label class="field">
+        <span>Jira default labels <small class="muted">(comma-separated)</small></span>
+        <input type="text" data-setting="integrations.jiraLabels" data-shape="csv-list" placeholder="qa, frontend" />
+      </label>
+      <label class="field span-2">
+        <span>Slack webhook URL <small class="muted">(optional — post issue summary on save)</small></span>
+        <input type="url" data-setting="integrations.slackWebhook" placeholder="https://hooks.slack.com/…" />
+      </label>
+      <label class="field">
+        <span>GitHub repo <small class="muted">(for source <code>file:line</code> deeplinks)</small></span>
+        <input type="text" data-setting="integrations.githubRepo" placeholder="owner/repo" />
+      </label>
+      <label class="field" data-modes="design-fidelity,custom">
+        <span>Figma access token</span>
+        <input type="password" data-setting="integrations.figmaToken" placeholder="figd_…" />
+      </label>
+    </div>
   </section>
 
   <section class="card">
@@ -121,9 +440,25 @@
     <p id="color-status" class="muted"></p>
   </section>
 
+  <section class="card" id="advanced-card">
+    <h2>Advanced</h2>
+    <div class="row">
+      <label><input type="checkbox" data-setting="advanced.debugLogging" /> Verbose debug logging in browser console</label>
+    </div>
+    <div class="row">
+      <button id="settings-export" type="button">Export all settings JSON</button>
+      <button id="settings-import" type="button">Import settings JSON…</button>
+      <input id="settings-import-file" type="file" accept="application/json,.json" hidden />
+      <button id="settings-reset" type="button" class="danger">Reset to defaults</button>
+    </div>
+    <p class="muted" id="storage-usage"></p>
+    <p class="muted" id="settings-version"></p>
+  </section>
+
   <script src="../lib/messages.js"></script>
   <script src="../lib/zip-store.js"></script>
   <script src="../profile/profile-validator.js"></script>
+  <script src="../core/annotation-editor.js"></script>
   <script src="../core/form-modal.js"></script>
   <script src="settings.js"></script>
 </body>
