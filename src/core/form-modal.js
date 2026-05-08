@@ -444,6 +444,26 @@
     return rows;
   }
 
+  // Mode-aware visibility for the legacy "Expected CSS rows" + "Figma link"
+  // common-form fields. They're meaningful only when comparing against a
+  // design spec — every other mode hides them to reduce friction. We still
+  // keep them visible in `custom` mode (no mode set / user picks all) and
+  // when the issue already has expected/figma data (re-edit must show what's
+  // there so the user can clear it).
+  function shouldShowExpectedCss(mode, issue) {
+    if (!mode || mode === 'custom') return true;
+    if (mode === 'design-fidelity') return true;
+    // Honor saved data from a different mode — show so user can clear/edit
+    const exp = issue.expected || {};
+    const hasUserExpected = Object.keys(exp).some((k) => !k.startsWith('figma'));
+    return hasUserExpected;
+  }
+  function shouldShowFigmaField(mode, issue) {
+    if (!mode || mode === 'custom') return true;
+    if (mode === 'design-fidelity') return true;
+    return !!(issue.expected?.figmaLink);
+  }
+
   function renderHtml(issue, opts = {}) {
     const sevs   = (self.QA?.SEVERITIES || ['critical','major','minor','info']);
     const types  = (self.QA?.ISSUE_TYPES || ['visual','content','i18n','a11y','interactive','broken']);
@@ -537,6 +557,7 @@
             ${renderComputedBlock(issue, elements)}
           </div>
 
+          ${shouldShowExpectedCss(mode, issue) ? `
           <div class="qa-row">
             <div class="qa-label-row">
               <label>Expected (Figma / spec)</label>
@@ -545,8 +566,9 @@
             ${elements.length > 1 ? renderExpectedTabsStrip(elements) : ''}
             <div class="qa-expected-pane" data-tab="all"></div>
             <datalist id="qa-prop-options" class="qa-prop-datalist"></datalist>
-          </div>
+          </div>` : ''}
 
+          ${shouldShowFigmaField(mode, issue) ? `
           <div class="qa-row">
             <div class="qa-label-row">
               <label>Figma link (optional)</label>
@@ -558,7 +580,7 @@
             ${issue.expected?.figmaBreadcrumb
                 ? `<span class="qa-figma-breadcrumb" title="Figma layer chain"><code>${escape(issue.expected.figmaBreadcrumb)}</code></span>`
                 : ''}
-          </div>
+          </div>` : ''}
 
           <div class="qa-row">
             <label>Note</label>
