@@ -71,6 +71,195 @@ Return after running:
 }
 ```
 
+## Schema compatibility
+
+The extension has accreted optional fields across versions. **Every read of a
+non-Phase-1 field MUST be defensive** (optional chain + fallback) so a v0.1.4
+report (Phase 1 only) renders identical output to what skill v1 produced,
+while a v0.5.x report renders the richer body. **Never crash on a missing
+field.**
+
+### Capability detection (run once per issue, before rendering)
+
+```js
+function rendererCapabilities(issue) {
+  return {
+    // v0.5.0+ — manual region capture, no DOM element. Skip Selector / Source
+    // / Computed sections entirely. issue.element is null and issue.elements is [].
+    isManual:        !!issue.isManual || (!issue.element && !(issue.elements?.length)),
+
+    // Phase 1 — present in every version. Used to decide whether to render
+    // the element-driven blocks at all. Falls back gracefully when absent.
+    hasElement:      !!(issue.element || (issue.elements?.length > 0)),
+
+    // v0.2.0+ — auto-tag rules from URL match. Empty array on legacy reports.
+    hasTags:         Array.isArray(issue.tags) && issue.tags.length > 0,
+
+    // v0.2.0+ — page-world ring buffer snapshot at pick time.
+    hasRuntime:      !!(issue.runtimeContext?.console?.length || issue.runtimeContext?.network?.length),
+
+    // v0.2.0+ — axe-core scan output.
+    hasA11y:         !!(issue.a11yFindings?.violations?.length || issue.a11yFindings?.contrast),
+
+    // v0.3.0+ — mode-aware modal panels (runtime-context, design-fidelity,
+    // app-state, a11y-findings, i18n-findings, pin-notes).
+    hasPanels:       !!(issue.panels && Object.keys(issue.panels).some((k) => panelHasContent(issue.panels[k]))),
+
+    // v0.2.0+ — annotation editor layers on screenshots[i].annotations.
+    hasAnnotations:  (issue.screenshots || []).some((s) => s.annotations?.layers?.length > 0)
+  };
+}
+
+function panelHasContent(p) {
+  if (!p || typeof p !== 'object') return false;
+  // pin-notes panel descriptor: { entries: [], count: N }
+  if (Array.isArray(p.entries)) return p.entries.length > 0;
+  // Other panels are flat objects — content if any value is truthy
+  return Object.values(p).some((v) => {
+    if (Array.isArray(v)) return v.length > 0;
+    if (typeof v === 'string') return v.trim().length > 0;
+    if (v && typeof v === 'object') return Object.keys(v).length > 0;
+    return !!v;
+  });
+}
+```
+
+### Field-by-field rules
+
+| Field | Source version | Rendering rule |
+|---|---|---|
+| `issue.element`, `issue.elements`, `issue.computed`, `issue.computedPerElement` | v0.1.0+ | Render as in skill v1 spec **only when** `caps.hasElement && !caps.isManual`. |
+| `issue.expected.figmaLink` + breadcrumb | v0.1.0+ | Same as v1 spec — already optional. |
+| `issue.expectedPerElement` | v0.1.4+ | Already optional in v1 spec — keep. |
+| `issue.tags` | v0.2.0+ | Pass through into Jira labels (Step 2 — see "Labels" section below). Empty array on legacy reports → no extra labels. |
+| `issue.runtimeContext` | v0.2.0+ | Render block **only when** `caps.hasRuntime`. Skip silently otherwise. |
+| `issue.a11yFindings` | v0.2.0+ | Render block **only when** `caps.hasA11y`. Skip silently otherwise. |
+| `issue.panels.{id}` | v0.3.0+ | Iterate panels in fixed order (runtime-context → design-fidelity → app-state → a11y-findings → i18n-findings → pin-notes). Render block per panel **only when** `panelHasContent(panel)`. |
+| `issue.screenshots[i].annotations` | v0.2.0+ | Pin notes derive from these layers (when `panels['pin-notes']` is missing, fall back to walking layers directly). Annotation count chips/tags ignore in body — they're modal-only UX. |
+| `issue.isManual` | v0.5.0+ | Drives the manual-issue branch (skip Selector/Source/Computed; emit `**Mode:** manual` line in metadata). |
+
+### Verification cases (must pass before publishing this skill)
+
+The two cases below are **fixtures**. After any edit to the rendering logic,
+run the skill against each and diff against the expected output. **Both
+cases must pass byte-for-byte** (whitespace tolerant, but no missing/extra
+sections).
+
+#### Case 1 — v0.1.4 legacy report (Phase 1 only)
+
+Input issue (relevant fields):
+
+```jsonc
+{
+  "id": "ISS-001",
+  "title": "CTA button padding wrong",
+  "severity": "major",
+  "type": "visual",
+  "page": "home",
+  "section": "hero",
+  "element":  { "selector": ".cta-primary", "tagName": "button", ... },
+  "elements": [{ "selector": ".cta-primary", ... }],
+  "source":   { "file": "src/sections/Hero.astro", "line": 42, "adapter": "astro" },
+  "computed":         { "fontSize": "14px", "padding": "8px 16px" },
+  "computedPerElement": [ { "fontSize": "14px", "padding": "8px 16px" } ],
+  "expected": { "font-size": "16px", "figmaLink": "https://figma.com/file/abc/x?node-id=1%3A23", "figmaBreadcrumb": "home > hero > CTA" },
+  "context":  { "viewport": { "w": 1280, "h": 720 }, "viewportLabel": "1280×720 · lg", "breakpoint": { "label": "lg" }, "device": { "platform": "macOS" }, "locale": "en" },
+  "screenshots": [ { "filename": "ISS-001-auto-1.png", "relativePath": "screenshots/ISS-001-auto-1.png" } ]
+  // NO tags, runtimeContext, a11yFindings, panels, annotations, isManual
+}
+```
+
+Expected per-issue body (config: `tech`, `bodyFormat: list`, `translate: en`):
+
+```md
+### CTA button padding wrong
+
+**Severity:** major
+**Type:** visual
+**Page:** home
+**Locale:** en
+**Viewport:** 1280×720 · lg
+**Breakpoint:** lg
+**Device:** macOS
+**File:line:** src/sections/Hero.astro:42
+
+**Selector:**
+`.cta-primary`
+
+**Expected**
+\`\`\`
+font-size: 16px
+\`\`\`
+
+**Actual (computed)**
+\`\`\`
+font-size: 14px
+padding: 8px 16px
+\`\`\`
+
+**Figma:** [home > hero > CTA](https://figma.com/file/abc/x?node-id=1%3A23)
+
+**Screenshots**
+- `ISS-001-auto-1.png` — `screenshots/ISS-001-auto-1.png`
+```
+
+NO Mode line. NO Tags line. NO Runtime block. NO A11y block. NO Panels. NO Pin notes. **Same shape as skill v1.**
+
+#### Case 2 — v0.5.x manual issue with panels
+
+Input issue (relevant fields):
+
+```jsonc
+{
+  "id": "ISS-007",
+  "title": "Dashboard graph mismatch",
+  "severity": "major",
+  "type": "visual",
+  "isManual": true,
+  "element":  null,
+  "elements": [],
+  "source":   { "adapter": "manual" },
+  "computed":  {},
+  "computedPerElement": [],
+  "expected":  {},
+  "tags": ["area:admin", "design"],
+  "context":   { "viewport": { "w": 1440, "h": 900 }, "viewportLabel": "1440×900 · xl", "locale": "en" },
+  "panels": {
+    "runtime-context": { "reproSteps": ["Open dashboard", "Compare line graph"], "expected": "matches Figma", "actual": "axis labels truncated" }
+  },
+  "screenshots": [ { "filename": "ISS-007-manual-1.png", "annotations": { "layers": [ { "type": "pin", "n": 1, "note": "axis cut" } ] } } ]
+}
+```
+
+Expected per-issue body — note the **manual variant**:
+
+```md
+### Dashboard graph mismatch
+
+**Severity:** major
+**Type:** visual
+**Mode:** manual region capture
+**Page:** —
+**Locale:** en
+**Viewport:** 1440×900 · xl
+**Tags:** area:admin · design
+
+**Steps to reproduce:**
+1. Open dashboard
+2. Compare line graph
+
+**Expected:** matches Figma
+**Actual:** axis labels truncated
+
+**Pin notes**
+- 📍 1 (shot 1) — axis cut
+
+**Screenshots**
+- `ISS-007-manual-1.png` — `screenshots/ISS-007-manual-1.png`
+```
+
+NO Selector block. NO Source line. NO Computed block. NO Figma line. **All blocks driven by capabilities — no crash on null `issue.element`.**
+
 ## Steps
 
 ### 1. Resolve parent (if needed)
@@ -84,9 +273,10 @@ Call `jira_get_issue` on the parent. If 404, return `{ error: "parent-not-found"
 For each `issue` in `report.issues`:
 
 - Skip if `issue.synced?.jiraKey` exists → push to `skipped` with reason `already-synced`.
-- Resolve **selectors** for the issue:
-  - `selectors = issue.elements?.map(e => e.selector) ?? [issue.element.selector]`
-  - `primarySelector = selectors[0]`
+- Compute capabilities once: `caps = rendererCapabilities(issue)` (see "Schema compatibility" section above).
+- Resolve **selectors** for the issue (handles manual issues from v0.5.0+):
+  - `if (caps.isManual || !caps.hasElement) { selectors = []; primarySelector = null; }`
+  - `else { selectors = (issue.elements?.length ? issue.elements : [issue.element]).filter(Boolean).map(e => e.selector); primarySelector = selectors[0] || null; }`
 - Resolve **screenshots**:
   - `shots = issue.screenshots ?? (issue.screenshot ? [issue.screenshot] : [])`
 - Resolve **viewport label**:
@@ -115,7 +305,14 @@ For each `issue` in `report.issues`:
     additional_fields: JSON.stringify({
       parent: mode === "subtasks" ? parent : undefined,      // string key, not { key }
       priority: { name: severityToPriority[issue.severity] || "Medium" },
-      labels: dedupe([...(profile.jira.defaultLabels || []), "qa-annotator", `severity-${issue.severity}`])
+      // Labels: combine profile defaults + extension auto-tags (v0.2.0+) +
+      // a few constants. Empty issue.tags on legacy reports → no extra labels.
+      labels: dedupe([
+        ...(profile.jira.defaultLabels || []),
+        "qa-annotator",
+        `severity-${issue.severity}`,
+        ...(Array.isArray(issue.tags) ? issue.tags : [])
+      ])
     })
   }
   ```
@@ -193,36 +390,43 @@ The issue description is a **Markdown string** that the MCP server converts to J
 
 ### Per-issue body (default — `bodyFormat: "list"`)
 
+The template below is **defensively rendered** — every block guards on either
+`caps.*` flags or a direct `?.length` check. Unknown blocks are skipped, not
+inlined as empty placeholders.
+
 ```md
 ### {displayTitle}     ← reuse the same translated value used in summary
 
 **Severity:** {issue.severity}
 **Type:** {issue.type}
-**Page:** {issue.page || report.scope.url}
+**Mode:** manual region capture     ← ONLY when caps.isManual; omit otherwise
+**Page:** {issue.page || report.scope.url || "—"}
 **Locale:** {issue.context.locale || report.scope.locale}
 **Viewport:** {viewportLabel}
 **Breakpoint:** {issue.context.breakpoint.label}     ← omit line if missing
 **Device:** {issue.context.device.platform}{isMobile ? " · mobile" : ""}     ← omit line if missing
-**File:line:** {issue.source.file}:{issue.source.line}     ← omit line if missing
+**File:line:** {issue.source.file}:{issue.source.line}     ← omit line if caps.isManual OR missing
+**Tags:** {issue.tags.join(" · ")}     ← ONLY when caps.hasTags; omit otherwise
 
 **Note:** {translate(issue.note)}     ← omit line if note is empty/missing
 
-**Selector{selectors.length>1?"s":""}:**
-{selectors.length === 1
-  ? "`" + selectors[0] + "`"
-  : selectors.map((s,i)=>`${i+1}. \`${s}\``).join("\n")}
+{renderSelectorBlock(issue, caps, selectors)}     ← see helper below; entire block omitted when caps.isManual or !caps.hasElement
 
-**Expected**
-```
-{format(issue.expected)}
-```
+{renderExpectedBlock(issue, caps)}     ← see helper below; emits `**Expected**` fenced only when issue.expected has non-figma keys
 
 {renderExpectedOverrides(issue)}     ← REQUIRED when issue.expectedPerElement has any non-null entry; otherwise omit
 
-**Actual (computed)**
-{renderActualBlocks(issue, selectors)}
+{renderActualSection(issue, caps, selectors)}     ← see helper below; entire section omitted when caps.isManual or computed empty
 
-**Figma:** [{figmaAnchor}]({figmaLink})     ← REQUIRED when figmaLink is resolvable; see Figma rules below
+{renderRuntimeContextBlock(issue, caps)}     ← v0.2.0+: ONLY when caps.hasRuntime; emit "**Steps to reproduce:** + Console + Network + Env" — see helper
+
+{renderA11yBlock(issue, caps)}     ← v0.2.0+: ONLY when caps.hasA11y; emit "**Accessibility:** + WCAG SC + violations + contrast" — see helper
+
+{renderPanelsBlock(issue, caps)}     ← v0.3.0+: ONLY when caps.hasPanels; iterate panels in fixed order, emit one block per non-empty panel — see helper
+
+{renderPinNotes(issue, caps)}     ← v0.2.0+: ONLY when caps.hasAnnotations OR panels['pin-notes']; bullet list of `📍 N (shot M) — note`
+
+**Figma:** [{figmaAnchor}]({figmaLink})     ← REQUIRED when figmaLink is resolvable; see Figma rules below. Skipped automatically when caps.isManual AND no figmaLink saved.
 
 **Screenshots**
 {renderScreenshots(shots)}
@@ -286,6 +490,142 @@ _Reported by {report.reporter || "QA Annotator"} · {report.exportedAt}_
 5. **Header row is exactly `| Field | Value |`** with `| --- | --- |` separator. Do not invent extra columns.
 
 ### Helpers
+
+**`renderSelectorBlock(issue, caps, selectors)`** — returns a Markdown string for the Selector(s) section, or `""` when the issue has no DOM element. Skips entirely when `caps.isManual || !caps.hasElement || selectors.length === 0`.
+
+```md
+**Selector{selectors.length>1?"s":""}:**
+{selectors.length === 1
+  ? "`" + selectors[0] + "`"
+  : selectors.map((s,i)=>`${i+1}. \`${s}\``).join("\n")}
+```
+
+**`renderExpectedBlock(issue, caps)`** — returns the shared `**Expected**` fenced block, or `""` when there are no non-figma keys to show.
+
+- Filter `issue.expected` to keys NOT starting with `figma`.
+- If empty → return `""`.
+- Else emit `**Expected**` heading + triple-backtick fence + `format(filtered)` body + closing fence.
+
+This means a manual issue with only `expected.figmaLink` (auto-matched at capture time) does NOT emit the Expected block — the Figma line below carries that information. v0.1.4 reports with shared expected CSS render exactly as before.
+
+**`renderActualSection(issue, caps, selectors)`** — returns `**Actual (computed)**` block + body, or `""` when:
+- `caps.isManual` is true (no element to compute on), OR
+- `issue.actual`, `issue.computed`, and `issue.computedPerElement` are all empty.
+
+Otherwise emit the existing logic from `renderActualBlocks` (single fence vs per-element). Adds a single `**Actual (computed)**` heading line above the body.
+
+**`renderRuntimeContextBlock(issue, caps)`** — v0.2.0+ ring-buffer snapshot. Returns `""` when `!caps.hasRuntime`. Otherwise:
+
+```md
+**Steps to reproduce:**
+{issue.panels?.['runtime-context']?.reproSteps?.length
+  ? issue.panels['runtime-context'].reproSteps.map((s,i)=>`${i+1}. ${s}`).join("\n")
+  : "—"}     ← only emit "Steps" sub-block when reproSteps non-empty (Sprint 2 panel data)
+
+**Expected:** {issue.panels?.['runtime-context']?.expected || "—"}     ← only when present
+**Actual:** {issue.panels?.['runtime-context']?.actual || "—"}     ← only when present
+
+**Console errors ({issue.runtimeContext.console.length}):**
+{issue.runtimeContext.console.slice(0, 10).map(c => `- \`${c.level.toUpperCase()}\` ${oneLine(c.message)}`).join("\n")}
+{issue.runtimeContext.console.length > 10 ? `- … +${issue.runtimeContext.console.length - 10} more` : ""}
+
+**Network failures ({issue.runtimeContext.network.length}):**
+{issue.runtimeContext.network.slice(0, 10).map(n => `- ${n.method} ${n.url} → **${n.status}** (${n.durationMs}ms)`).join("\n")}
+
+**Env:** {issue.runtimeContext.env.userAgent || "?"} · viewport {env.viewport.w}×{env.viewport.h}@{env.viewport.dpr || 1}x · lang {env.language || "?"}
+```
+
+If `issue.runtimeContext.console` is missing/empty, omit the **Console errors** sub-block entirely. Same for network. Same for env. The skill must not emit empty section headings.
+
+`oneLine(s)` collapses runs of whitespace to a single space; trims.
+
+**`renderA11yBlock(issue, caps)`** — v0.2.0+ axe-core scan output. Returns `""` when `!caps.hasA11y`.
+
+```md
+**Accessibility:**
+
+**Contrast:** {ratio}:1 (need ≥ {threshold}:1) — {fail ? "**fails AA**" : "passes AA"} · fg `{fg}` / bg `{bg}`     ← only when issue.a11yFindings.contrast present
+
+**Violations ({violations.length}):**
+{violations.map(v => "- `" + v.id + "` (" + (v.impact || "minor") + ")"
+  + (v.wcag?.length ? " · " + v.wcag.join(" ") : "")
+  + " — " + oneLine(v.help || v.description || "")
+  + (v.helpUrl ? "\n  - [docs](" + v.helpUrl + ")" : "")
+  + (v.selectors?.[0] ? "\n  - target: `" + v.selectors[0] + "`" : "")
+).join("\n")}
+
+**Fix suggestion:** {issue.panels?.['a11y-findings']?.fixSuggestion}     ← only when v0.3.0+ panel data has it
+**Affected user group:** {issue.panels?.['a11y-findings']?.affectedUserGroup}     ← only when present
+```
+
+If `violations` is empty but `contrast` exists, still emit the Contrast line and skip the Violations block. If neither exists, the helper returns `""`.
+
+**`renderPanelsBlock(issue, caps)`** — v0.3.0+ mode-aware modal panels. Returns `""` when `!caps.hasPanels`. Iterate panels in this fixed order (matches extension's panel-registry):
+
+`['runtime-context', 'design-fidelity', 'app-state', 'a11y-findings', 'i18n-findings', 'pin-notes']`
+
+For each panel id:
+- Skip if `!panelHasContent(issue.panels[id])`.
+- Skip `runtime-context` and `a11y-findings` here — they're rendered by `renderRuntimeContextBlock` / `renderA11yBlock` above (which read both `issue.runtimeContext` AND `issue.panels['runtime-context']` user fields). Avoid duplicate output.
+- Skip `pin-notes` here — handled by `renderPinNotes` so the bullet list lands right before Screenshots.
+
+Per-panel template:
+
+- **`design-fidelity`** (only `mismatchCategory` and `notes` are user-editable):
+  ```md
+  **Mismatch category:** {data.mismatchCategory}
+  **Implementation notes:** {oneLine(data.notes)}     ← only when non-empty
+  ```
+- **`app-state`**:
+  ```md
+  ### App state
+  **User role:** {data.role}
+  **Tenant / account ID:** {data.tenantId}
+  **Action attempted:** {oneLine(data.actionAttempted)}
+  **Route:** `{data.auto.route}`
+  **Open modal:** `{data.auto.openModal}`
+  **Table state:** `{data.auto.tableState}`
+  **Form payload:**
+  \`\`\`json
+  {data.formPayload}
+  \`\`\`
+  ```
+  Skip any line whose value is empty.
+- **`i18n-findings`**:
+  ```md
+  ### Localization
+  - **Locale:** {data.locale}
+  - **Direction:** {data.direction}
+  - **i18n key:** `{data.i18nKey}`
+  - **Bug category:** {data.bugCategory}
+  - **Type:** {data.linguisticOrTechnical}
+
+  **Source string:** {oneLine(data.sourceString)}
+  **Rendered string:** {oneLine(data.renderedString)}
+  **Notes:** {oneLine(data.notes)}
+  ```
+  Skip lines with empty values.
+
+**`renderPinNotes(issue, caps)`** — v0.2.0+ annotation editor pins with notes. Returns `""` when there are no pins with notes.
+
+Walk `issue.screenshots[]`. For each screenshot, find pins (`layer.type === 'pin'`) where `(layer.note || '').trim()` is non-empty. Group output by screenshot index when there are multiple shots:
+
+```md
+**Pin notes:**
+- 📍 1 (shot 1) — {note}
+- 📍 2 (shot 1) — {note}
+- 📍 1 (shot 2) — {note}
+```
+
+When all pins live on a single shot, drop the `(shot N)` qualifier:
+
+```md
+**Pin notes:**
+- 📍 1 — {note}
+- 📍 2 — {note}
+```
+
+If no pins have notes, the helper returns `""` and the **Pin notes** heading does not appear.
 
 **`translate(text)`** — used for `displayTitle`, `issue.note`, and free-text strings inside `issue.expected`:
 - If `config.translate === "off"` → return `text` unchanged.
@@ -374,6 +714,9 @@ The following were observed across machines and must be rejected:
 7. **Inline image embeds — both wiki and Markdown forms render as literal text on this adapter.** Verified live on ELS-1317 (2026-05-07): `!filename|thumbnail!` (wiki) gets rewritten to `![](filename)` (Markdown), which Jira UI then renders as plain text — no thumbnail, no broken-image placeholder. Do NOT emit either form. Use the plain-text bullet from `renderScreenshots` and rely on the **Attachments panel** in the Jira sidebar (which auto-renders thumbnails for files uploaded via Step 2b's `jira_update_issue`).
 8. **Re-translating per call site** — translate `title` and `note` ONCE at the top of issue processing and reuse the cached value in both summary and heading. Translating twice can produce different strings on different invocations of the same MCP tool.
 9. **Merging `expectedPerElement` into the shared `Expected` block** — the override array is rendered as separate `**Expected — (N) overrides**` sub-blocks, not folded into the shared block. Two distinct surfaces preserve QA intent (which fields were chosen as overrides vs. inherited from All). Conversely, do not omit the shared block when overrides exist; both render together.
+10. **Crashing on missing fields** — every read of a v0.2.0+ field MUST be optional-chained. v0.1.4 reports do not emit `tags`, `runtimeContext`, `a11yFindings`, `panels`, or `screenshots[i].annotations`. Defensive reads + capability detection (see "Schema compatibility" section) are the contract — break it and old reports stop syncing.
+11. **Synthesizing an Element block for manual issues** — when `caps.isManual` is true, NEVER emit a Selector / Source / Computed block, even with placeholder values like `(no element)`. Manual issues are intentionally selector-less. The metadata `**Mode:** manual region capture` line is the only nod to the absence.
+12. **Duplicating `runtime-context` data** — both `issue.runtimeContext` (auto-captured ring buffer) and `issue.panels['runtime-context']` (user-edited repro steps + expected/actual) feed the same Markdown block via `renderRuntimeContextBlock`. Do NOT emit them as two separate blocks. The helper combines them into one **Steps to reproduce** + **Expected/Actual** + **Console** + **Network** + **Env** block.
 
 If you find yourself about to emit any of the above, stop and re-read the per-issue template.
 
