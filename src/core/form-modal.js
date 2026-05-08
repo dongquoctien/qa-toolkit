@@ -73,13 +73,19 @@
       // built-in severity is never empty (always pre-seeded), so a strict
       // 'severity' requirement here mostly catches the 'no severity dropdown'
       // edge case in customized profiles.
-      const requiredFields = (opts?.settings?.defaults?.requiredFields) || [];
+      // Read required-field map from the form config (Sprint 3 builder).
+      // Each common field can be hidden/optional/required per mode; we only
+      // validate fields the user marked 'required' in their config.
+      const formCfgForValidate = getFormConfig(opts);
+      function isReq(id) { return fieldRequired(formCfgForValidate, id); }
       function validateRequired() {
         const errors = [];
         const titleVal = $('.qa-title')?.value?.trim() || '';
         const severityVal = $('.qa-severity')?.value || '';
+        const noteVal = $('.qa-note')?.value?.trim() || '';
+        const typeVal = $('.qa-type')?.value || '';
         const hasShots = shots && shots.length > 0;
-        const hasExpected = (() => {
+        const hasExpectedCss = (() => {
           const pane = overlay.querySelector('.qa-expected-pane');
           if (!pane) return false;
           for (const row of pane.querySelectorAll('.qa-expected-row')) {
@@ -87,12 +93,16 @@
             const v = row.querySelector('.qa-exp-val')?.value?.trim() || '';
             if (k && v) return true;
           }
-          return !!($('.qa-figma-link')?.value?.trim());
+          return false;
         })();
-        if (requiredFields.includes('title')      && !titleVal)    errors.push({ field: 'title',      sel: '.qa-title' });
-        if (requiredFields.includes('severity')   && !severityVal) errors.push({ field: 'severity',   sel: '.qa-severity' });
-        if (requiredFields.includes('screenshot') && !hasShots)    errors.push({ field: 'screenshot', sel: '.qa-gallery' });
-        if (requiredFields.includes('expected')   && !hasExpected) errors.push({ field: 'expected',   sel: '.qa-expected-pane' });
+        const hasFigma = !!($('.qa-figma-link')?.value?.trim());
+        if (isReq('title')       && !titleVal)         errors.push({ field: 'title',       sel: '.qa-title' });
+        if (isReq('severity')    && !severityVal)      errors.push({ field: 'severity',    sel: '.qa-severity' });
+        if (isReq('type')        && !typeVal)          errors.push({ field: 'type',        sel: '.qa-type' });
+        if (isReq('note')        && !noteVal)          errors.push({ field: 'note',        sel: '.qa-note' });
+        if (isReq('expectedCss') && !hasExpectedCss)   errors.push({ field: 'expected CSS', sel: '.qa-expected-pane' });
+        if (isReq('figmaLink')   && !hasFigma)         errors.push({ field: 'Figma link',  sel: '.qa-figma-link' });
+        if (isReq('screenshots') && !hasShots)         errors.push({ field: 'screenshots', sel: '.qa-gallery' });
         return errors;
       }
       function showValidationErrors(errors) {
@@ -463,17 +473,36 @@
   // keep them visible in `custom` mode (no mode set / user picks all) and
   // when the issue already has expected/figma data (re-edit must show what's
   // there so the user can clear it).
-  function shouldShowExpectedCss(mode, issue) {
-    if (!mode || mode === 'custom') return true;
-    if (mode === 'design-fidelity') return true;
-    // Honor saved data from a different mode — show so user can clear/edit
-    const exp = issue.expected || {};
-    const hasUserExpected = Object.keys(exp).some((k) => !k.startsWith('figma'));
-    return hasUserExpected;
+  // Read the user-configurable form config for this mode (Sprint 3 form
+  // builder). Falls back to optional state when form-config module not loaded.
+  function getFormConfig(opts) {
+    const settings = opts?.settings || {};
+    const mode = settings.mode || 'custom';
+    const fc = self.QA?.formConfig;
+    if (fc?.getEffectiveFormConfig) {
+      return { mode, config: fc.getEffectiveFormConfig(mode, settings) };
+    }
+    return { mode, config: null };
   }
-  function shouldShowFigmaField(mode, issue) {
-    if (!mode || mode === 'custom') return true;
-    if (mode === 'design-fidelity') return true;
+  function fieldState(formCfg, fieldId) {
+    if (!formCfg?.config) return 'optional';
+    return formCfg.config.fields?.[fieldId] || 'optional';
+  }
+  function fieldVisible(formCfg, fieldId) {
+    return fieldState(formCfg, fieldId) !== 'hidden';
+  }
+  function fieldRequired(formCfg, fieldId) {
+    return fieldState(formCfg, fieldId) === 'required';
+  }
+
+  // Show Expected CSS / Figma link when config visible OR issue has data.
+  function shouldShowExpectedCss(formCfg, issue) {
+    if (fieldVisible(formCfg, 'expectedCss')) return true;
+    const exp = issue.expected || {};
+    return Object.keys(exp).some((k) => !k.startsWith('figma'));
+  }
+  function shouldShowFigmaField(formCfg, issue) {
+    if (fieldVisible(formCfg, 'figmaLink')) return true;
     return !!(issue.expected?.figmaLink);
   }
 
@@ -511,6 +540,8 @@
     ].filter(Boolean).join('\n');
 
     const mode = opts?.settings?.mode || null;
+    // Resolve form config once per render; passed to all helpers.
+    const formCfg = getFormConfig(opts);
     const MODE_LABELS = {
       'prod-bug': 'PROD bug', 'design-fidelity': 'Design',
       'admin': 'Admin', 'a11y': 'A11y', 'i18n': 'i18n', 'custom': 'Custom'
@@ -543,22 +574,26 @@
         <section class="qa-modal-body">
           <div class="qa-validation-banner" role="alert" hidden></div>
 
+          ${fieldVisible(formCfg, 'title') ? `
           <div class="qa-row">
-            <label>Title</label>
+            <label>Title${fieldRequired(formCfg, 'title') ? ' <span class="qa-req">*</span>' : ''}</label>
             <input class="qa-title" type="text" placeholder="Short description" value="${escape(issue.title || '')}" />
             ${(issue.tags || []).length ? `<div class="qa-tags-row">${(issue.tags || []).map((t) => `<span class="qa-tag-chip">${escape(t)}</span>`).join('')}</div>` : ''}
-          </div>
+          </div>` : ''}
 
+          ${fieldVisible(formCfg, 'severity') || fieldVisible(formCfg, 'type') ? `
           <div class="qa-row qa-row-2">
+            ${fieldVisible(formCfg, 'severity') ? `
             <div>
-              <label>Severity</label>
+              <label>Severity${fieldRequired(formCfg, 'severity') ? ' <span class="qa-req">*</span>' : ''}</label>
               <select class="qa-severity">${sevOpts}</select>
-            </div>
+            </div>` : ''}
+            ${fieldVisible(formCfg, 'type') ? `
             <div>
-              <label>Type</label>
+              <label>Type${fieldRequired(formCfg, 'type') ? ' <span class="qa-req">*</span>' : ''}</label>
               <select class="qa-type">${typeOpts}</select>
-            </div>
-          </div>
+            </div>` : ''}
+          </div>` : ''}
 
           <div class="qa-row">
             <label>${elements.length > 1 ? `Elements (${elements.length})` : 'Element'}</label>
@@ -570,7 +605,7 @@
             ${renderComputedBlock(issue, elements)}
           </div>
 
-          ${shouldShowExpectedCss(mode, issue) ? `
+          ${shouldShowExpectedCss(formCfg, issue) ? `
           <div class="qa-row">
             <div class="qa-label-row">
               <label>Expected (Figma / spec)</label>
@@ -581,7 +616,7 @@
             <datalist id="qa-prop-options" class="qa-prop-datalist"></datalist>
           </div>` : ''}
 
-          ${shouldShowFigmaField(mode, issue) ? `
+          ${shouldShowFigmaField(formCfg, issue) ? `
           <div class="qa-row">
             <div class="qa-label-row">
               <label>Figma link (optional)</label>
@@ -595,16 +630,18 @@
                 : ''}
           </div>` : ''}
 
+          ${fieldVisible(formCfg, 'note') ? `
           <div class="qa-row">
-            <label>Note</label>
+            <label>Note${fieldRequired(formCfg, 'note') ? ' <span class="qa-req">*</span>' : ''}</label>
             <textarea class="qa-note" rows="3" placeholder="Free-text context (paste images here too)"></textarea>
-          </div>
+          </div>` : ''}
 
           ${renderPanelsBlock(issue, opts)}
 
+          ${fieldVisible(formCfg, 'screenshots') ? `
           <div class="qa-row">
             <div class="qa-label-row">
-              <label>Screenshots</label>
+              <label>Screenshots${fieldRequired(formCfg, 'screenshots') ? ' <span class="qa-req">*</span>' : ''}</label>
               <span class="qa-hint">drag to reorder · click to preview</span>
             </div>
             <div class="qa-gallery"></div>
@@ -614,7 +651,7 @@
               <button class="qa-upload" type="button" title="Upload image file(s)">Upload…</button>
               <input class="qa-upload-input" type="file" accept="image/*" multiple style="display:none" />
             </div>
-          </div>
+          </div>` : ''}
         </section>
 
         <footer class="qa-modal-footer">

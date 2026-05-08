@@ -440,11 +440,40 @@
     <p id="color-status" class="muted"></p>
   </section>
 
-  <section class="card" data-modes="custom">
-    <h2>Custom mode panels</h2>
-    <p>When QA mode is set to <strong>Custom</strong>, the modal shows the panels you tick here. Leave empty to show every registered panel.</p>
-    <div id="custom-panels-grid" class="custom-panels-grid">
-      <p class="muted">Loading panel registry — open the in-page modal once to populate.</p>
+  <section class="card" data-modes="prod-bug,design-fidelity,admin,a11y,i18n,custom">
+    <h2>QA issue form per mode</h2>
+    <p>
+      Configure which fields and panels appear in the issue modal for each QA mode,
+      and which are required before save. Defaults reflect the typical workflow per mode.
+    </p>
+    <div id="form-builder">
+      <nav id="form-builder-tabs" class="form-builder-tabs" role="tablist">
+        <button type="button" data-tab="prod-bug" class="active">PROD bug</button>
+        <button type="button" data-tab="design-fidelity">Design fidelity</button>
+        <button type="button" data-tab="admin">Admin</button>
+        <button type="button" data-tab="a11y">A11y</button>
+        <button type="button" data-tab="i18n">i18n</button>
+        <button type="button" data-tab="custom">Custom</button>
+      </nav>
+      <div id="form-builder-toolbar" class="form-builder-toolbar">
+        <label class="muted">
+          Copy from:
+          <select id="form-builder-copy-from">
+            <option value="">— pick a mode —</option>
+            <option value="prod-bug">PROD bug</option>
+            <option value="design-fidelity">Design fidelity</option>
+            <option value="admin">Admin</option>
+            <option value="a11y">A11y</option>
+            <option value="i18n">i18n</option>
+            <option value="custom">Custom</option>
+          </select>
+          <button type="button" id="form-builder-copy-apply">Apply</button>
+        </label>
+        <button type="button" id="form-builder-reset" class="danger">Reset to defaults</button>
+      </div>
+      <div id="form-builder-table" class="form-builder-table">
+        <p class="muted">Loading…</p>
+      </div>
     </div>
   </section>
 
@@ -467,6 +496,7 @@
   <script src="../lib/zip-store.js"></script>
   <script src="../profile/profile-validator.js"></script>
   <script src="../core/annotation-editor.js"></script>
+  <script src="../core/form-config.js"></script>
   <script src="../core/panel-registry.js"></script>
   <script src="../core/panels/pin-notes.js"></script>
   <script src="../core/panels/runtime-context.js"></script>

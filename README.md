@@ -111,6 +111,16 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ---
 
+## What's new in v0.4.0 (2026-05-08)
+
+- **Form builder per QA mode** — Settings → "QA issue form per mode" card lets you configure which fields and panels appear in the issue modal for each mode, and which are required before save.
+  - Tabs across 6 modes (prod-bug / design-fidelity / admin / a11y / i18n / custom).
+  - Each common field + panel has a 3-state pill: **Hidden** (gray) / **Optional** (blue) / **Required** (pink).
+  - Required fields show a red asterisk on the modal label and block save until filled.
+  - **Copy from another mode** to bootstrap a custom config quickly.
+  - **Reset to defaults** restores per-mode defaults.
+- Modal common rows (Severity / Type / Note / Expected CSS / Figma link / Screenshots) now render conditionally based on form config — non-design modes get a much cleaner form by default.
+
 ## What's new in v0.3.0 (2026-05-08)
 
 - **Mode-aware modal panels** — each QA mode shows the right form fields. No more generic Note + Expected CSS rows for every bug type:

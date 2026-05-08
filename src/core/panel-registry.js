@@ -51,9 +51,20 @@
 
   function panelsForMode(mode, settings) {
     const all = listAll();
+    // Sprint 3: form config takes precedence. If formConfig is loaded, use
+    // its panels[].state to drive visibility. Falls back to legacy MODE_MAP
+    // when form-config module isn't loaded yet.
+    const fc = target.QA?.formConfig;
+    if (fc?.getEffectiveFormConfig) {
+      const cfg = fc.getEffectiveFormConfig(mode || 'custom', settings || {});
+      const visible = new Set();
+      for (const [pid, p] of Object.entries(cfg.panels || {})) {
+        if (p.state !== 'hidden') visible.add(pid);
+      }
+      return all.filter((p) => visible.has(p.id));
+    }
+    // Legacy fallback (Sprint 2)
     if (mode === 'custom') {
-      // Custom: union of MODE_MAP defaults + settings.customPanels[] preset.
-      // Empty preset → show every registered panel (collapsed).
       const preset = (settings?.customPanels && settings.customPanels.length)
         ? settings.customPanels
         : PANEL_ORDER;

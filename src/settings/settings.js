@@ -794,57 +794,175 @@
     applySettingsToFields(settings);
     markActiveMode(settings?.mode);
     applyModeVisibility(settings?.mode || 'custom');
-    refreshCustomPanelsGrid();
+    refreshFormBuilder();
   }
 
-  // ============== Custom mode panels grid ==============
-  // Panel registry is loaded as a script in settings.html; if present, render
-  // a checkbox grid so users can pick which panels show in Custom mode. Empty
-  // selection means "show every registered panel".
-  function refreshCustomPanelsGrid() {
-    const grid = document.getElementById('custom-panels-grid');
-    if (!grid) return;
+  // ============== QA issue form builder per mode ==============
+  // Tabs across the top — one per QA mode. Each tab shows a table of common
+  // form fields + registered panels. 3-state segmented pill per row:
+  //   Hidden | Optional | Required
+  // Toolbar: "Copy from <mode>" + "Reset to defaults".
+  let _activeFormTab = 'prod-bug';
+
+  function refreshFormBuilder() {
+    const table = document.getElementById('form-builder-table');
+    if (!table) return;
+    const fc = self.QA?.formConfig;
     const reg = self.QA?.panelRegistry;
-    if (!reg?.listPanelIds) {
-      grid.innerHTML = '<p class="muted">Panel registry not loaded on settings page.</p>';
+    if (!fc) {
+      table.innerHTML = '<p class="muted">Form config module not loaded.</p>';
       return;
     }
-    const panels = reg.listPanelIds();
-    if (!panels.length) {
-      grid.innerHTML = '<p class="muted">No panels registered yet.</p>';
-      return;
-    }
-    const enabled = new Set(_liveSettings?.customPanels || []);
-    grid.innerHTML = panels.map((p) => {
-      const checked = enabled.has(p.id) ? 'checked' : '';
-      const modeChips = (p.modes || []).map((m) => `<span class="tag">${escapeHtml(m)}</span>`).join(' ');
+    const config = fc.getEffectiveFormConfig(_activeFormTab, _liveSettings || {});
+
+    // Common fields
+    const commonRows = fc.COMMON_FIELDS.map((f) => {
+      const state = config.fields?.[f.id] || 'optional';
+      const lockedHint = f.always
+        ? ' <small class="muted">(core — always required)</small>'
+        : '';
+      const effectiveState = f.always ? 'required' : state;
+      const disabled = f.always ? 'data-locked="1"' : '';
       return `
-        <label class="custom-panel-row">
-          <input type="checkbox" class="custom-panel-toggle" value="${escapeAttr(p.id)}" ${checked} />
-          <div class="custom-panel-body">
-            <strong>${escapeHtml(p.title)}</strong>
-            <small>id: <code>${escapeHtml(p.id)}</code> · default in: ${modeChips || '—'}</small>
-          </div>
-        </label>
+        <tr class="fb-row" data-row-type="field" data-row-id="${escapeAttr(f.id)}" ${disabled}>
+          <td class="fb-name">
+            <strong>${escapeHtml(f.label)}</strong>${lockedHint}
+            <small><code>${escapeHtml(f.id)}</code></small>
+          </td>
+          <td class="fb-state">${pillHtml(effectiveState, f.always)}</td>
+        </tr>
       `;
     }).join('');
+
+    // Panels
+    const panels = reg?.listPanelIds?.() || [];
+    const panelRows = panels.map((p) => {
+      const pcfg = config.panels?.[p.id] || { state: 'optional', fields: {} };
+      const modeChips = (p.modes || []).map((m) => `<span class="tag">${escapeHtml(m)}</span>`).join(' ');
+      return `
+        <tr class="fb-row fb-panel-row" data-row-type="panel" data-row-id="${escapeAttr(p.id)}">
+          <td class="fb-name">
+            <strong>📦 ${escapeHtml(p.title)}</strong>
+            <small>panel · default in: ${modeChips || '—'}</small>
+          </td>
+          <td class="fb-state">${pillHtml(pcfg.state, false)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    table.innerHTML = `
+      <table class="fb-table">
+        <thead>
+          <tr><th>Field / Panel</th><th class="fb-state-th">Visibility</th></tr>
+        </thead>
+        <tbody>
+          <tr class="fb-section-head"><td colspan="2">Common form fields</td></tr>
+          ${commonRows}
+          ${panelRows ? `<tr class="fb-section-head"><td colspan="2">Mode panels</td></tr>${panelRows}` : ''}
+        </tbody>
+      </table>
+    `;
+
+    // Update tabs visually.
+    document.querySelectorAll('#form-builder-tabs button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.tab === _activeFormTab);
+    });
   }
 
-  // Persist toggle changes (delegated, no need to re-bind on refresh).
-  document.addEventListener('change', async (e) => {
-    const cb = e.target.closest && e.target.closest('input.custom-panel-toggle');
-    if (!cb) return;
-    const grid = document.getElementById('custom-panels-grid');
-    if (!grid) return;
-    const ids = [...grid.querySelectorAll('input.custom-panel-toggle:checked')].map((c) => c.value);
-    const r = await rpc({ type: MSG.SETTING_SET, payload: { customPanels: ids } });
+  function pillHtml(state, locked) {
+    const states = [
+      { id: 'hidden',   label: 'Hidden' },
+      { id: 'optional', label: 'Optional' },
+      { id: 'required', label: 'Required' }
+    ];
+    return `
+      <div class="fb-pill${locked ? ' fb-pill-locked' : ''}" role="radiogroup">
+        ${states.map((s) => `
+          <button type="button" class="fb-pill-btn ${state === s.id ? 'is-active' : ''}" data-state="${escapeAttr(s.id)}" ${locked ? 'disabled' : ''}>${escapeHtml(s.label)}</button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  // Persist a single field / panel state change for the active tab.
+  async function persistFormBuilder(rowType, rowId, newState) {
+    const fc = self.QA?.formConfig;
+    if (!fc) return;
+    // Build patch — only the changed cell, deep-merged via SETTING_SET.
+    const patch = { modeForms: {} };
+    patch.modeForms[_activeFormTab] = {};
+    if (rowType === 'field') {
+      patch.modeForms[_activeFormTab].fields = { [rowId]: newState };
+    } else if (rowType === 'panel') {
+      patch.modeForms[_activeFormTab].panels = { [rowId]: { state: newState } };
+    }
+    const r = await rpc({ type: MSG.SETTING_SET, payload: patch });
     if (r?.settings) _liveSettings = r.settings;
-  });
+  }
+
+  function bindFormBuilder() {
+    const root = document.getElementById('form-builder');
+    if (!root) return;
+    // Tabs.
+    document.getElementById('form-builder-tabs')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-tab]');
+      if (!btn) return;
+      _activeFormTab = btn.dataset.tab;
+      refreshFormBuilder();
+    });
+    // Pill clicks (delegated).
+    root.addEventListener('click', async (e) => {
+      const pillBtn = e.target.closest('.fb-pill-btn');
+      if (!pillBtn || pillBtn.disabled) return;
+      const row = pillBtn.closest('.fb-row');
+      if (!row) return;
+      const rowType = row.dataset.rowType;
+      const rowId = row.dataset.rowId;
+      const newState = pillBtn.dataset.state;
+      // Optimistic: update UI immediately.
+      row.querySelectorAll('.fb-pill-btn').forEach((b) => b.classList.toggle('is-active', b === pillBtn));
+      await persistFormBuilder(rowType, rowId, newState);
+    });
+    // Copy-from button.
+    document.getElementById('form-builder-copy-apply')?.addEventListener('click', async () => {
+      const sel = document.getElementById('form-builder-copy-from');
+      const sourceMode = sel?.value;
+      if (!sourceMode || sourceMode === _activeFormTab) {
+        alert('Pick a different source mode.');
+        return;
+      }
+      if (!confirm(`Copy form config from "${sourceMode}" to "${_activeFormTab}"? This overwrites current settings for ${_activeFormTab}.`)) return;
+      const fc = self.QA?.formConfig;
+      const sourceConfig = fc.getEffectiveFormConfig(sourceMode, _liveSettings || {});
+      const patch = { modeForms: { [_activeFormTab]: sourceConfig } };
+      const r = await rpc({ type: MSG.SETTING_SET, payload: patch });
+      if (r?.settings) _liveSettings = r.settings;
+      refreshFormBuilder();
+    });
+    // Reset button.
+    document.getElementById('form-builder-reset')?.addEventListener('click', async () => {
+      if (!confirm(`Reset "${_activeFormTab}" form to default config?`)) return;
+      // Clear the user override by setting modeForms[mode] = null. The
+      // service-worker mergeSettings is a top-level shallow merge, so we
+      // need to fetch full settings, drop the key, write back.
+      const cur = await rpc({ type: MSG.SETTING_GET });
+      const next = { ...(cur || {}) };
+      next.modeForms = { ...(cur?.modeForms || {}) };
+      delete next.modeForms[_activeFormTab];
+      // Force-write whole settings object via the service-worker API.
+      await chrome.storage.local.set({ settings: next });
+      _liveSettings = next;
+      // Broadcast to content scripts so live tabs refresh too.
+      try { await rpc({ type: MSG.SETTING_SET, payload: {} }); } catch {}
+      refreshFormBuilder();
+    });
+  }
 
   bindFieldHandlers();
   bindModePicker();
   bindCardCollapse();
   bindAdvanced();
+  bindFormBuilder();
   await loadColor();
   await loadAllSettings();
   await refresh();
