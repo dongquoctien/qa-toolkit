@@ -228,6 +228,12 @@ Panels can either mutate the source object (e.g. pin-notes writes `layer.note` i
 
 `exporter.js#renderPanelsMarkdown` iterates panels in a fixed order: runtime → design → app-state → a11y → i18n → pin-notes. Pin-notes always last because it references screenshots that come after the panels block. Panels with no data return `[]` so the export stays compact when only common fields are filled. The early-skip condition `!panels[id] && id !== 'runtime-context' && id !== 'a11y-findings' && id !== 'pin-notes'` allows those three panels to render even with empty `issue.panels[id]` — they read from `issue.runtimeContext`, `issue.a11yFindings`, and `issue.screenshots` respectively (auto-populated at pick time, not user-edited).
 
+### 23. Bullet `- **bold:** value` strips closing `**` (qa-sync-jira)
+
+Documented in skill v0.3.0 anti-pattern #13. The mcp-atlassian Markdown→wiki adapter eats the closing `**` when a bold-key starts a bullet line: `- **Severity:** major` → `- *Severity:* major` (italic, not bold). Plain paragraph `**Severity:** major` (no `-` prefix) is fine. Verified live on ELS-1379 (2026-05-09) with 13 A/B test patterns. **The exporter `renderPanelsMarkdown` and `renderIssueMarkdown` use paragraph form for bold-keys (no bullet marker) — keep it that way.** If you ever need a bulleted bold-key list, use `- **Key** — value` (em-dash separator) instead of `- **Key:** value` colon shape.
+
+Same constraint applies to user-authored prose that gets emitted to Jira: `oneLine()` does not auto-rewrite bullets, so if a user puts `- **note** this is bold` inside `issue.note`, it WILL break. The skill v0.3.0 applies `escapeProseQuirks` (defined in SKILL.md, anti-pattern #15) to user prose before emitting, but the extension's note input doesn't currently warn about this — flag for v0.6.0 if it becomes a frequent paper cut.
+
 ---
 
 ## Common tasks

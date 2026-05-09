@@ -638,6 +638,23 @@ If no pins have notes, the helper returns `""` and the **Pin notes** heading doe
 - object → `key: val` lines joined by `\n` (keys and values both verbatim)
 - empty / null → `—`
 
+**`escapeProseQuirks(text)`** — applied to user-authored prose values BEFORE they land in non-fenced Markdown context (notes, repro steps, design-fidelity notes, panel descriptions). Anti-pattern #15 — adapter strips/mangles certain plain-text patterns:
+
+```js
+function escapeProseQuirks(text) {
+  if (!text) return text;
+  return String(text)
+    // ` + ` between words → ` and ` (adapter eats standalone +)
+    .replace(/(\S) \+ (\S)/g, '$1 and $2')
+    // [Bracketed] tokens (not Markdown links) → escape brackets
+    .replace(/(?<!\!)\[([^\]]+)\](?!\()/g, '\\[$1\\]')
+    // identifier_with_underscore → wrap in inline backticks (so adapter sees code, not italic)
+    .replace(/(?<![`\w])([A-Za-z][A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)(?![`\w])/g, '`$1`');
+}
+```
+
+Apply `escapeProseQuirks` to: `issue.note`, `panels['runtime-context'].reproSteps[]`, `panels['runtime-context'].expected`, `panels['runtime-context'].actual`, `panels['design-fidelity'].notes`, `panels['app-state'].actionAttempted`, `panels['i18n-findings'].sourceString`, `panels['i18n-findings'].renderedString`, `panels['i18n-findings'].notes`, and pin-note text. Do NOT apply to fenced code block content (it's already inert) or to technical fields (selectors, computed CSS — they stay in fences anyway). Do NOT apply to translated `displayTitle` either; titles rarely contain these patterns and the translator output is curated.
+
 **`renderExpectedOverrides(issue)`** — returns a Markdown string for per-element expected overrides, or empty string when there are none:
 
 - If `issue.expectedPerElement` is missing, not an array, or every entry is `null` / empty → return `""`. The shared **Expected** block above is the only one rendered.
@@ -717,6 +734,25 @@ The following were observed across machines and must be rejected:
 10. **Crashing on missing fields** — every read of a v0.2.0+ field MUST be optional-chained. v0.1.4 reports do not emit `tags`, `runtimeContext`, `a11yFindings`, `panels`, or `screenshots[i].annotations`. Defensive reads + capability detection (see "Schema compatibility" section) are the contract — break it and old reports stop syncing.
 11. **Synthesizing an Element block for manual issues** — when `caps.isManual` is true, NEVER emit a Selector / Source / Computed block, even with placeholder values like `(no element)`. Manual issues are intentionally selector-less. The metadata `**Mode:** manual region capture` line is the only nod to the absence.
 12. **Duplicating `runtime-context` data** — both `issue.runtimeContext` (auto-captured ring buffer) and `issue.panels['runtime-context']` (user-edited repro steps + expected/actual) feed the same Markdown block via `renderRuntimeContextBlock`. Do NOT emit them as two separate blocks. The helper combines them into one **Steps to reproduce** + **Expected/Actual** + **Console** + **Network** + **Env** block.
+13. **Bullet-list items prefixed with `**bold:**`** — `- **Severity:** major` (or `* **Severity:** major`) loses the closing `**` after the adapter rewrite, rendering as `- *Severity:* major` (italic, not bold). Verified live on ELS-1379 (2026-05-09, comments 14601 + 14602 — 13 patterns A/B-tested):
+    - ✅ **Paragraph** `**Severity:** major` (no bullet) — preserved
+    - ✅ **Paragraph** `**Severity**: major` (period after `**`) — preserved
+    - ✅ **Paragraph** `**Severity** — major` (em-dash) — preserved
+    - ❌ **Bullet** `- **Severity:** major` — closing `**` stripped
+    - ❌ **Bullet** `- **Severity**: major` — closing `**` stripped
+    - ✅ **Bullet** `- **Severity** — major` (em-dash) — preserved
+    - ✅ **Bullet** `- Severity: major` (no bold) — fine, plain text
+    - ❌ **Bullet** `- *Severity*: major` (single-asterisk italic) — stripped
+    - ✅ **Bullet** `` - `Severity`: major `` (backticks instead of bold) — fine
+    
+    **Conventions for skill v0.3.0+:**
+    - **Default**: paragraph form `**Key:** value` (one per line, no bullet marker). Already in use in the per-issue metadata block.
+    - **If a bullet list is required**: use `- **Key** — value` (em-dash separator) OR `- Key: value` (no bold).
+    - **Never**: `- **Key:** value` or `- **Key**: value` — adapter eats the closing `**`.
+    
+    The per-issue metadata block in this spec already uses paragraph form, so the default tech body is safe. New helpers and audience formats MUST follow these rules.
+14. **Inline backticks around HTML strings** — `` `<button class="btn">x</button>` `` (single backticks around an HTML snippet on one line) gets HTML-stripped by the adapter: only inner text survives, all tags vanish. This catches `Element source` and `HTML:` fields when emitted inline. Verified live on ELS-1379 (2026-05-09): a TC-05-style a11y violation block lost every `<button>` tag and rendered just `Button`. **Rule**: HTML element source MUST go in a fenced triple-backtick block, never inline. The skill's `renderSourceBlock` (used in v0.1.4 reports' Element source path) already uses fenced blocks; new helpers (e.g. `renderA11yBlock` HTML samples, `renderRuntimeContextBlock` console entries containing tags) must follow the same pattern. One-line snippets still need a fence — there is no "short enough to inline" exception.
+15. **User-authored prose inside notes/repro steps containing `+`, `[brackets]`, or `_underscores_`** — these are not skill bugs but the user can put them in `issue.note`, `panels['runtime-context'].reproSteps`, or `panels['design-fidelity'].notes`. The adapter strips `+ ` (plus-space) entirely, treats `_word_` as italic, and eats `[text]` brackets when not part of a Markdown link. The skill itself does not need to escape these for technical fields (selectors, computed values stay inside fences and are inert), but **`oneLine()` should also `escapeProseQuirks()`** before emitting prose values: replace ` + ` with ` and `, escape underscores in identifier-like tokens (`save_button_click` → `` `save_button_click` ``), and escape `[X]` literal brackets when not inside a Markdown link as `\[X\]`. This rescues legacy notes copy-pasted from logs.
 
 If you find yourself about to emit any of the above, stop and re-read the per-issue template.
 
