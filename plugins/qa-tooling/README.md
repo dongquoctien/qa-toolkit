@@ -44,15 +44,17 @@ QA/QC workflow automation for web projects. Auto-detects your stack, generates a
 The plugin is published as part of the **qa-annotator** Claude Code marketplace. In a Claude Code session at any project:
 
 ```
-/plugin marketplace add dongquoctien/qa-annotator-extension
+/plugin marketplace add dongquoctien/qa-toolkit
 /plugin install qa-tooling@qa-annotator
 ```
 
 Then run `/qa:init` to bootstrap a project. Subsequent updates pull automatically — re-run `/plugin marketplace update qa-annotator` to refresh.
 
+> The marketplace was previously installed as `dongquoctien/qa-annotator-extension`. GitHub redirects keep that working — no action needed for existing installs.
+
 > Manual install (no marketplace): clone this repo and add an absolute path to the project's `.claude/settings.json`:
 > ```jsonc
-> { "plugins": ["<absolute-path>/qa-annotator-extension/plugins/qa-tooling"] }
+> { "plugins": ["<absolute-path>/qa-toolkit/plugins/qa-tooling"] }
 > ```
 
 ## Recommended MCP servers
