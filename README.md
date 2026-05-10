@@ -5,10 +5,10 @@
 > screenshot, computed styles, console + network logs, and a Figma deeplink.
 > Sync to Jira via Claude Code. More extensions coming.
 
-> **Repo name note** — the GitHub slug is still `qa-annotator-extension` for now
-> to keep the existing plugin marketplace URL stable. The repo will rename to
-> `qa-toolkit` once a second extension ships. GitHub redirects keep all old
-> URLs working.
+> **Renamed from `qa-annotator-extension` on 2026-05-10**. GitHub redirects
+> the old URL automatically — existing clones, plugin installs, and bookmarks
+> keep working without action. Update your git remote at leisure:
+> `git remote set-url origin https://github.com/dongquoctien/qa-toolkit.git`
 
 ---
 
@@ -46,7 +46,7 @@ Two pieces, one repo. They share two JSON contracts:
 ### Extension (qa-annotator)
 
 **For QA team (no git):** download the latest ZIP from
-[Releases](https://github.com/dongquoctien/qa-annotator-extension/releases/latest),
+[Releases](https://github.com/dongquoctien/qa-toolkit/releases/latest),
 unzip, then in Chrome:
 
 1. `chrome://extensions` → enable **Developer mode**
@@ -55,7 +55,7 @@ unzip, then in Chrome:
 
 **For devs (clone + load source):**
 
-1. `git clone https://github.com/dongquoctien/qa-annotator-extension.git`
+1. `git clone https://github.com/dongquoctien/qa-toolkit.git`
 2. `chrome://extensions` → **Developer mode** → **Load unpacked**
 3. Select **`extensions/qa-annotator/`** (NOT the repo root — Chrome needs the
    folder containing `manifest.json`)
@@ -71,7 +71,7 @@ Detailed setup: [`extensions/qa-annotator/docs/INSTALL.md`](extensions/qa-annota
 In a Claude Code session at any project:
 
 ```
-/plugin marketplace add dongquoctien/qa-annotator-extension
+/plugin marketplace add dongquoctien/qa-toolkit
 /plugin install qa-tooling@qa-annotator
 ```
 

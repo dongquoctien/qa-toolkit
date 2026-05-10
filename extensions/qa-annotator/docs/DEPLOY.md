@@ -8,8 +8,8 @@ How to ship the extension and the plugin to teammates / production.
 
 | What you want to do | How |
 |---|---|
-| Share the extension with QA team | `git tag v0.X.0 && git push origin v0.X.0` → CI builds + uploads to release. Share `https://github.com/dongquoctien/qa-annotator-extension/releases/latest` |
-| Share the plugin with devs | They run `/plugin marketplace add dongquoctien/qa-annotator-extension` then `/plugin install qa-tooling@qa-annotator` |
+| Share the extension with QA team | `git tag v0.X.0 && git push origin v0.X.0` → CI builds + uploads to release. Share `https://github.com/dongquoctien/qa-toolkit/releases/latest` |
+| Share the plugin with devs | They run `/plugin marketplace add dongquoctien/qa-toolkit` then `/plugin install qa-tooling@qa-annotator` |
 | Build extension ZIP locally | `node scripts/package-extension.mjs` → `dist/qa-annotator-extension-v<ver>.zip` |
 | Bump version | Edit `manifest.json#version` AND `plugins/qa-tooling/plugin.json#version` AND `.claude-plugin/marketplace.json#metadata.version` AND `#plugins[0].version`, commit, then tag |
 
@@ -43,7 +43,7 @@ git tag v0.2.0 && git push origin v0.2.0
 A GitHub Actions workflow ([`.github/workflows/release.yml`](../.github/workflows/release.yml)) catches the tag, packages the extension, and uploads the ZIP as a release asset. Team members download from:
 
 ```
-https://github.com/dongquoctien/qa-annotator-extension/releases/latest
+https://github.com/dongquoctien/qa-toolkit/releases/latest
 ```
 
 The workflow:
@@ -97,7 +97,7 @@ Not yet shipped. When ready:
 The repo declares a Claude Code marketplace via `.claude-plugin/marketplace.json`. In any Claude Code session, regardless of project:
 
 ```
-/plugin marketplace add dongquoctien/qa-annotator-extension
+/plugin marketplace add dongquoctien/qa-toolkit
 /plugin install qa-tooling@qa-annotator
 ```
 
@@ -143,7 +143,7 @@ If a team prefers pinning to a fork or a tag:
 
 ### Pin to a tag
 ```
-/plugin marketplace add dongquoctien/qa-annotator-extension@v0.1.0
+/plugin marketplace add dongquoctien/qa-toolkit@v0.1.0
 ```
 
 ### Use an internal fork
@@ -155,7 +155,7 @@ If a team prefers pinning to a fork or a tag:
 Each project adds this repo as a submodule at `tools/qa-annotator-extension/`, then references `tools/qa-annotator-extension/plugins/qa-tooling` in `.claude/settings.json`.
 
 ```bash
-git submodule add git@github.com:dongquoctien/qa-annotator-extension tools/qa-annotator-extension
+git submodule add git@github.com:dongquoctien/qa-toolkit tools/qa-annotator-extension
 ```
 
 ---
