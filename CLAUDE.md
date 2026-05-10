@@ -10,19 +10,35 @@ Read this when picking up this repo in a future session. It covers architecture,
 
 ## Repo at a glance
 
+Restructured as a monorepo on 2026-05-10. GitHub slug is still
+`qa-annotator-extension` (will rename to `qa-toolkit` once 2nd extension
+ships); `.claude-plugin/marketplace.json` source path stays `./plugins/qa-tooling`
+so existing plugin installs keep working through GitHub URL redirects.
+
 ```
-qa-annotator-extension/
-├── manifest.json                ← Chrome MV3 — must stay at repo root
-├── src/                         ← Extension code (vanilla JS, no bundler)
-├── plugins/qa-tooling/                      ← Claude Code plugin "qa-tooling"
-├── assets/                      ← Extension PNG icons
-├── docs/                        ← INSTALL, DEPLOY, archive
-├── README.md                    ← entry point
-├── STATUS.md                    ← done / not done / known issues
-└── CLAUDE.md                    ← this file
+qa-annotator-extension/                       ← repo (slug not yet renamed)
+├── extensions/
+│   └── qa-annotator/                         ← MV3 extension — Load unpacked HERE
+│       ├── manifest.json                     ← (moved from repo root)
+│       ├── src/                              ← (moved from repo root)
+│       ├── assets/, img/, scripts/           ← (moved from repo root)
+│       ├── docs/INSTALL.md, DEPLOY.md        ← (moved from repo root docs/)
+│       └── README.md                         ← extension-specific quick docs
+├── shared/                                   ← NEW — empty, extraction policy in shared/README.md
+├── plugins/
+│   └── qa-tooling/                           ← Claude Code plugin (unchanged path — DO NOT MOVE)
+├── .claude-plugin/
+│   └── marketplace.json                      ← unchanged path (plugin source stays ./plugins/qa-tooling)
+├── docs/
+│   └── archive/                              ← original Phase 1 design docs
+├── README.md                                 ← toolkit-level landing
+├── STATUS.md
+└── CLAUDE.md                                 ← this file
 ```
 
-The extension and the plugin are **independent** — they share two JSON contracts (`qa-profile-v1` and `qa-figma-tree-v1`) but have no runtime coupling. You can ship either one alone.
+The extension and the plugin are **independent** — they share two JSON contracts (`qa-profile-v1` and `qa-figma-tree-v1`) but have no runtime coupling. You can ship either one alone. Future extensions live as siblings under `extensions/`.
+
+**Critical for plugin compat**: do NOT move `plugins/qa-tooling/` or `.claude-plugin/marketplace.json`. Source path in marketplace.json is `./plugins/qa-tooling` — relative to repo root. Moving either breaks every existing plugin install.
 
 ---
 
@@ -79,6 +95,9 @@ When Claude Code runs `/qa:figma-sync`, it reads `plugins/qa-tooling/commands/qa
 ## Key files (one-line tour)
 
 ### Extension
+
+> **Path note**: every path in this section is relative to `extensions/qa-annotator/`. Listed without the prefix to keep the table readable. So `src/content/content.js` actually lives at `extensions/qa-annotator/src/content/content.js`.
+
 | File | Role |
 |---|---|
 | `manifest.json` | MV3 manifest. Permissions, content_scripts (order matters), web_accessible_resources for the built-in empty profile. |
