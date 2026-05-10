@@ -107,8 +107,8 @@ descending priority order. Each will live as its own folder under
 | 1 | **qa-annotator** | ✅ v0.6.0 (shipped) | Bug reporting from any live site |
 | 2 | **qa-i18n-coverage** | 🟡 planned next | Highlight i18n keys, spot hardcoded text via pseudo-locale, audit missing translations. Reads `qa-profile.localeStrategy`. |
 | 3 | **qa-api-monitor** | 🟡 planned next | Floating dock logs failed `XHR/fetch`, slow requests, `4xx/5xx`, copy-as-cURL one-click, attach to Jira ticket. Lifts the runtime-buffer module out of qa-annotator. |
-| 4 | **[qa-test-runner](extensions/qa-test-runner/README.md)** | 🟡 scaffolded (v0.0.1) | Record QA flows on dev → replay on stg/prod. Re-check qa-annotator issues across environments. See its README for the 5-feature roadmap and `qa-test-suite-v1` schema. |
-| 5 | **qa-visual-regression** | 🟢 backlog | Snapshot all pages from `qa-profile.pages[]` × viewport → diff vs baseline → flag pixel diff. Uses `chrome.downloads` for storage (avoids `chrome.storage.local` quota). |
+| 4 | **qa-visual-regression** | 🟢 backlog | Snapshot all pages from `qa-profile.pages[]` × viewport → diff vs baseline → flag pixel diff. Uses `chrome.downloads` for storage (avoids `chrome.storage.local` quota). |
+| 5 | **qa-test-runner** | 🟢 backlog | Record click/type/assert → replay → screenshot diff. Output `tests/e2e/<flow>.spec.ts` (Playwright format). |
 | 6 | **ba-requirement-capturer** | 🟢 backlog | Click element → "describe this requirement" → export user-story Markdown → push to Jira description. |
 | 7 | **qa-jira-quick-action** | 🟢 backlog | Toolbar popup: log time, change status, assign without opening Jira. Auto-detects ticket from branch name. |
 | 8 | **qa-acceptance-tracer** | 🔵 idea | Mount Jira AC list as overlay → tag elements as "covers AC #2" → report missing test coverage. |
@@ -160,7 +160,6 @@ creep on the main toolkit. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | Doc | What |
 |---|---|
 | [`extensions/qa-annotator/README.md`](extensions/qa-annotator/README.md) | qa-annotator install, modes, panels, hotkeys |
-| [`extensions/qa-test-runner/README.md`](extensions/qa-test-runner/README.md) | qa-test-runner scaffold + v0.1.0 roadmap (regression replay, issue re-check) |
 | [`plugins/qa-tooling/README.md`](plugins/qa-tooling/README.md) | Plugin commands · skills · install in another project |
 | [`STATUS.md`](STATUS.md) | What's built · what's not · known limitations · bugs caught + fixed |
 | [`CLAUDE.md`](CLAUDE.md) | Codebase guide for Claude Code in future sessions — architecture, conventions, gotchas |
@@ -194,9 +193,5 @@ MIT — see [`LICENSE`](LICENSE).
   pin-notes lazy-mount fix.
 - **qa-tooling plugin**: v0.3.0 — `/qa:init`, `/qa:doctor`, `/qa:figma-sync`,
   `/qa:sync` (latest with Markdown adapter quirks fixed).
-- **qa-test-runner**: v0.0.1 scaffold (released 2026-05-10) — folders, manifest,
-  module placeholders, design doc + `qa-test-suite-v1` schema. v0.1.0 (issue
-  re-check + recorder) next.
-- **shared/**: placeholder. Extraction begins when a 3rd extension lands and a
-  shared selector module becomes worth extracting.
-- **qa-i18n-coverage / qa-api-monitor**: not started.
+- **shared/**: placeholder. Extraction begins when 2nd extension lands.
+- **2nd extension (qa-i18n-coverage or qa-api-monitor)**: not started.
