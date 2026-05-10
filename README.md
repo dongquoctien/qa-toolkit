@@ -107,7 +107,7 @@ descending priority order. Each will live as its own folder under
 | 1 | **qa-annotator** | ✅ v0.6.0 (shipped) | Bug reporting from any live site |
 | 2 | **qa-i18n-coverage** | 🟡 planned next | Highlight i18n keys, spot hardcoded text via pseudo-locale, audit missing translations. Reads `qa-profile.localeStrategy`. |
 | 3 | **qa-api-monitor** | 🟡 planned next | Floating dock logs failed `XHR/fetch`, slow requests, `4xx/5xx`, copy-as-cURL one-click, attach to Jira ticket. Lifts the runtime-buffer module out of qa-annotator. |
-| 4 | **[qa-test-runner](extensions/qa-test-runner/README.md)** | 🟡 scaffolded (v0.0.1) | Record QA flows on dev → replay on stg/prod. Re-check qa-annotator issues across environments. See its README for the 5-feature roadmap and `qa-test-suite-v1` schema. |
+| 4 | **[qa-test-runner](extensions/qa-test-runner/README.md)** | 🟢 v0.1.0 (issue re-check) | Re-check qa-annotator issues across dev/stg/prod. Imports a `qa-report-v1` ZIP or JSON, resolves each issue's selector on the current tab, and diffs `expected` vs current computed styles. Recorder + replay coming v0.2.0. |
 | 5 | **qa-visual-regression** | 🟢 backlog | Snapshot all pages from `qa-profile.pages[]` × viewport → diff vs baseline → flag pixel diff. Uses `chrome.downloads` for storage (avoids `chrome.storage.local` quota). |
 | 6 | **ba-requirement-capturer** | 🟢 backlog | Click element → "describe this requirement" → export user-story Markdown → push to Jira description. |
 | 7 | **qa-jira-quick-action** | 🟢 backlog | Toolbar popup: log time, change status, assign without opening Jira. Auto-detects ticket from branch name. |
@@ -194,9 +194,9 @@ MIT — see [`LICENSE`](LICENSE).
   pin-notes lazy-mount fix.
 - **qa-tooling plugin**: v0.3.0 — `/qa:init`, `/qa:doctor`, `/qa:figma-sync`,
   `/qa:sync` (latest with Markdown adapter quirks fixed).
-- **qa-test-runner**: v0.0.1 scaffold (released 2026-05-10) — folders, manifest,
-  module placeholders, design doc + `qa-test-suite-v1` schema. v0.1.0 (issue
-  re-check + recorder) next.
+- **qa-test-runner**: v0.1.0 (released 2026-05-10) — Issue re-check feature
+  shipped. Import qa-annotator's qa-report ZIP/JSON, verify on any environment,
+  per-property diff UI, JSON export. Recorder + replay (v0.2.0) next.
 - **shared/**: placeholder. Extraction begins when a 3rd extension lands and a
   shared selector module becomes worth extracting.
 - **qa-i18n-coverage / qa-api-monitor**: not started.

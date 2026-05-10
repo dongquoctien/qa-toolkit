@@ -8,31 +8,45 @@
 <body>
   <header>
     <h1>QA Test Runner</h1>
-    <a href="#" id="open-settings">Settings</a>
+    <span class="version" title="qa-test-runner version">v0.1.0</span>
   </header>
 
-  <section class="row">
-    <button id="record" class="primary" disabled>
-      Record flow (coming v0.1.0)
+  <section class="row row-import">
+    <label class="field">
+      <span>QA report</span>
+      <input id="report-file" type="file" accept=".zip,.json,application/zip,application/json" />
+    </label>
+    <p class="hint">Export from <strong>QA Annotator</strong> popup → JSON or ZIP. ZIP is fine — we read the inner JSON.</p>
+  </section>
+
+  <section class="row row-actions">
+    <button id="run-recheck" class="primary" disabled>
+      Re-check on this tab
     </button>
   </section>
 
-  <section class="row">
-    <button id="run-suite" disabled>
-      Run regression suite (coming v0.2.0)
-    </button>
+  <section class="row row-disabled">
+    <button class="ghost" disabled title="Coming v0.2.0">Record flow</button>
+    <button class="ghost" disabled title="Coming v0.2.0">Run regression suite</button>
   </section>
 
-  <section class="row">
-    <button id="check-issues" disabled>
-      Re-check qa-annotator issues (coming v0.1.0)
-    </button>
+  <section id="result-block" class="row" hidden>
+    <div class="result-header">
+      <strong id="result-title">Result</strong>
+      <span id="result-summary" class="muted"></span>
+    </div>
+    <ul id="result-list"></ul>
+    <div class="row-actions">
+      <button id="export-result" class="ghost" disabled>Export JSON</button>
+    </div>
   </section>
 
   <footer>
-    <p class="status">Scaffold v0.0.1 — see <code>README.md</code> for the build plan.</p>
+    <p class="muted">Companion to <a href="https://github.com/dongquoctien/qa-toolkit/tree/main/extensions/qa-annotator" target="_blank" rel="noopener">QA Annotator</a>. Re-check verifies <code>expected</code> CSS rows on the current tab.</p>
   </footer>
 
+  <script src="../lib/messages.js"></script>
+  <script src="../lib/zip-store.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

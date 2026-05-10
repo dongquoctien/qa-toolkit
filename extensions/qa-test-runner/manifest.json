@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "QA Test Runner",
   "short_name": "QA Test Runner",
-  "version": "0.0.1",
-  "description": "Record QA flows on dev → replay on stg/prod. Re-check issues caught by qa-annotator across environments. Companion to QA Annotator.",
+  "version": "0.1.0",
+  "description": "Re-check qa-annotator issues across dev/stg/prod. Imports a qa-report-v1 ZIP/JSON and verifies every issue's expected vs current computed styles. Recorder + replay coming next.",
 
   "minimum_chrome_version": "114",
 
@@ -21,7 +21,20 @@
 
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "QA Test Runner"
+    "default_title": "QA Test Runner",
+    "default_icon": {
+      "16":  "assets/extension_icon16.png",
+      "32":  "assets/extension_icon32.png",
+      "48":  "assets/extension_icon48.png",
+      "128": "assets/extension_icon128.png"
+    }
+  },
+
+  "icons": {
+    "16":  "assets/extension_icon16.png",
+    "32":  "assets/extension_icon32.png",
+    "48":  "assets/extension_icon48.png",
+    "128": "assets/extension_icon128.png"
   },
 
   "background": {
@@ -39,6 +52,8 @@
       ],
       "js": [
         "src/lib/messages.js",
+        "src/lib/property-normalize.js",
+        "src/lib/issue-recheck.js",
         "src/lib/selector-strategy.js",
         "src/content/recorder.js",
         "src/content/player.js",

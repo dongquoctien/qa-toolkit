@@ -1,8 +1,9 @@
 # QA Test Runner — Chrome Extension
 
-> **Status: scaffold v0.0.1.** Folders, manifest, and module placeholders only. Real
-> logic ships in v0.1.0. Read this file before opening a PR for any feature —
-> the design decisions below should hold up across the next 3-4 milestones.
+> **Status: v0.1.0 — Issue re-check shipped.** Recorder + replay still scaffolded
+> placeholders; see [Milestones](#milestones). Read this file before opening a
+> PR for any feature — the design decisions below hold up across the next 3-4
+> milestones.
 
 Companion extension to [qa-annotator](../qa-annotator/README.md). Where qa-annotator
 is for **logging** issues (one-off, manual), qa-test-runner is for **regression** —
@@ -294,8 +295,9 @@ follow-up tickets.
 
 | Version | Features | Estimate |
 |---|---|---|
-| **v0.0.1** *(this scaffold)* | Folder structure, manifest, module placeholders, this README | ✅ done |
-| **v0.1.0** | Issue-recheck (read qa-report.json → re-verify), basic recorder (click + type + navigate, save sequence to storage), suite list in popup | 2–3 sessions |
+| **v0.0.1** *(scaffold)* | Folder structure, manifest, module placeholders, README | ✅ done |
+| **v0.1.0** *(this release)* | Issue re-check: import qa-report-v1 ZIP/JSON → resolve selector on current tab → diff expected vs current computed styles → emit FIXED / STILL_BROKEN / STALE_SELECTOR / OUT_OF_SCOPE / NO_EXPECTED. Popup with file picker, expandable per-property table, JSON export of result. Recorder/player still placeholders. | ✅ done |
+| **v0.2.0** | Recorder (click + type + navigate + assertions), basic player, suite list in popup, save sequence to chrome.storage / suite file | 2–3 sessions |
 | **v0.2.0** | Player (replay + assertions), cross-env URL substitution, run-result storage in IndexedDB, basic report popup | 2–3 sessions |
 | **v0.3.0** | Side-panel report UI with screenshot diff, suite import/export `<project>/docs/qa/test-suites/`, drift dashboard | 2 sessions |
 | **v0.4.0** | Settings page (env mapping editor, default wait timeout, screenshot on/off), suite tags + filter | 1 session |
@@ -316,15 +318,36 @@ follow-up tickets.
 
 ---
 
-## Install (when v0.1.0 ships)
+## Install
 
 1. `chrome://extensions` → **Developer mode**
 2. **Load unpacked** → `extensions/qa-test-runner/`
 3. Pin **QA Test Runner** to the toolbar
 4. Optional: install qa-annotator alongside for full toolkit
 
-Right now the extension loads but does nothing — buttons are disabled until
-v0.1.0. Skip the install until then.
+## Usage (v0.1.0)
+
+1. In qa-annotator, after logging issues, click **Export ZIP** (or JSON) from
+   the popup.
+2. Open the target site (any environment — dev, stg, prod) and navigate to
+   where the issue was originally logged. The extension matches by hostname
+   and selector — different host returns `OUT_OF_SCOPE`.
+3. Click the **QA Test Runner** toolbar icon → pick the report file → click
+   **Re-check on this tab**.
+4. Each issue gets a verdict chip. Expand a row to see per-property `expected`
+   vs `current` values side-by-side.
+5. Click **Export JSON** to save the result as `qa-recheck-v1.json` for
+   archival or follow-up Jira sync.
+
+### Verdicts at a glance
+
+| Chip | Meaning |
+|---|---|
+| `FIXED` | Every expected CSS row now matches the live computed value. |
+| `BROKEN` | At least one row mismatches. The recorded broken value is still present (or has drifted to a different wrong value). |
+| `STALE` | None of the issue's selectors resolved on the page. The element was renamed/removed or the tab is on the wrong route. |
+| `OUT-SCOPE` | Issue was logged on a different hostname. Open the right environment first. |
+| `NO-EXP` | Issue has no expected CSS rows to verify (only Figma link or pin notes). Skipped. |
 
 ---
 
