@@ -32,6 +32,15 @@
 
   <div id="mode-hint" class="qa-mode-hint" role="status"></div>
 
+  <div class="settings-layout">
+    <aside class="settings-sidebar" aria-label="Settings sections">
+      <div class="settings-search-row">
+        <input id="settings-search" type="search" placeholder="Search settings…" aria-label="Search settings" />
+      </div>
+      <nav id="settings-toc" aria-label="Settings table of contents"></nav>
+    </aside>
+    <main class="settings-main">
+
   <section class="card" id="mode-card">
     <h2>QA mode <span id="mode-badge" class="tag" hidden></span></h2>
     <p>
@@ -491,6 +500,9 @@
     <p class="muted" id="storage-usage"></p>
     <p class="muted" id="settings-version"></p>
   </section>
+
+    </main>
+  </div>
 
   <script src="../lib/messages.js"></script>
   <script src="../lib/zip-store.js"></script>

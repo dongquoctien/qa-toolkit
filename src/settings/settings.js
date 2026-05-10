@@ -707,6 +707,8 @@
         }
       }
     }
+    // Notify the sidebar so the TOC re-renders with the new visible set.
+    document.dispatchEvent(new CustomEvent('qa:mode-visibility-changed'));
   }
 
   // Click card heading to toggle collapse — works on every card except
@@ -983,6 +985,98 @@
     });
   }
 
+  // ── Sidebar TOC + search (v0.6.0) ─────────────────────────────────
+  // Build a left-rail TOC from every visible .card on the page. Each h2 text
+  // becomes the entry label; the section gets an auto-generated id so anchors
+  // work. Search filters the TOC entries AND hides cards whose label/h2/p
+  // text doesn't match — keeping the page focused while typing.
+  function slugify(text) {
+    return String(text || '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'section';
+  }
+  function buildSidebar() {
+    const toc = document.getElementById('settings-toc');
+    if (!toc) return;
+    const cards = Array.from(document.querySelectorAll('.settings-main .card'));
+    const seen = new Set();
+    toc.innerHTML = cards.map((card) => {
+      const h2 = card.querySelector('h2');
+      const text = (h2?.textContent || '').replace(/\s+/g, ' ').trim();
+      let id = card.id || slugify(text);
+      let dedup = id;
+      let n = 2;
+      while (seen.has(dedup)) dedup = `${id}-${n++}`;
+      seen.add(dedup);
+      if (!card.id) card.id = dedup;
+      // Hide non-visible cards from the TOC entirely (mode filter wins).
+      const hidden = card.classList.contains('qa-mode-hidden');
+      return `<a href="#${card.id}" class="settings-toc-link${hidden ? ' is-hidden' : ''}" data-card-id="${card.id}">${escapeHtml(text || card.id)}</a>`;
+    }).join('');
+
+    // Smooth scroll on click. Default anchor jump works but jumps abruptly.
+    toc.addEventListener('click', (e) => {
+      const link = e.target.closest('a.settings-toc-link');
+      if (!link) return;
+      const target = document.getElementById(link.dataset.cardId);
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        history.replaceState(null, '', `#${link.dataset.cardId}`);
+      }
+    });
+
+    // Scroll spy — mark the topmost-visible card's TOC entry active.
+    const linksByCard = new Map(
+      Array.from(toc.querySelectorAll('a.settings-toc-link')).map((a) => [a.dataset.cardId, a])
+    );
+    const io = new IntersectionObserver((entries) => {
+      const visible = entries.filter((e) => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible.length === 0) return;
+      for (const [, a] of linksByCard) a.classList.remove('is-active');
+      const id = visible[0].target.id;
+      linksByCard.get(id)?.classList.add('is-active');
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    for (const card of cards) io.observe(card);
+  }
+
+  function bindSearch() {
+    const input = document.getElementById('settings-search');
+    if (!input) return;
+    let timer = null;
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => applySearch(input.value), 100);
+    });
+  }
+  function applySearch(query) {
+    const q = String(query || '').trim().toLowerCase();
+    const cards = document.querySelectorAll('.settings-main .card');
+    const tocLinks = document.querySelectorAll('#settings-toc a.settings-toc-link');
+    if (!q) {
+      // Clear filter: restore mode-driven visibility (already on each card).
+      cards.forEach((c) => c.classList.remove('search-hidden'));
+      tocLinks.forEach((a) => a.classList.remove('search-hidden'));
+      return;
+    }
+    cards.forEach((card) => {
+      const haystack = (card.textContent || '').toLowerCase();
+      const matched = haystack.includes(q);
+      card.classList.toggle('search-hidden', !matched);
+    });
+    tocLinks.forEach((a) => {
+      const card = document.getElementById(a.dataset.cardId);
+      a.classList.toggle('search-hidden', card?.classList.contains('search-hidden'));
+    });
+  }
+
+  buildSidebar();
+  bindSearch();
+  // Re-build sidebar after mode picker toggles card visibility — the mode
+  // filter sets display:none on cards, and we want the TOC to mirror that.
+  document.addEventListener('qa:mode-visibility-changed', () => buildSidebar());
+
   bindFieldHandlers();
   bindModePicker();
   bindCardCollapse();
@@ -993,4 +1087,7 @@
   await refresh();
   await refreshIssues();
   await refreshTrees();
+  // Initial sidebar pass after async loads — some cards may have been hidden
+  // by mode filter applied during binding.
+  buildSidebar();
 })();
