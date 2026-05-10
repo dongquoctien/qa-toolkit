@@ -3,14 +3,14 @@
 ## Prerequisites
 
 - Chrome 114+ or any Chromium browser (Edge, Brave, etc.).
-- Optional but recommended: the [`qa-tooling` Claude Code plugin](../plugins/qa-tooling/README.md) to generate a project profile.
+- Optional but recommended: the [`qa-tooling` Claude Code plugin](../../../plugins/qa-tooling/README.md) to generate a project profile.
 
 ## Load the extension
 
 1. Open `chrome://extensions`.
 2. Enable **Developer mode** (top-right toggle).
 3. Click **Load unpacked**.
-4. Select the repo root: `D:\Github\qa-annotator-extension`.
+4. Select this folder: `<repo>/extensions/qa-annotator/` (NOT the repo root — Chrome needs the folder containing `manifest.json`).
 5. The extension appears as **QA Annotator**. Pin it to the toolbar.
 
 > **Icons.** The extension ships with a Q&A speech-bubble icon at `assets/extension_icon{16,32,48,128}.png`, registered both as the toolbar (`action.default_icon`) and the extension-management icon (`icons`). To swap the artwork, replace those four PNGs and reload — no manifest change needed.
