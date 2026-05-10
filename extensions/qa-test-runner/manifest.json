@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "QA Test Runner",
   "short_name": "QA Test Runner",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Re-check qa-annotator issues across dev/stg/prod. Imports a qa-report-v1 ZIP/JSON and verifies every issue's expected vs current computed styles. Recorder + replay coming next.",
 
   "minimum_chrome_version": "114",

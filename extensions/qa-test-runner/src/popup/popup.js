@@ -24,12 +24,140 @@
       $('run-recheck').disabled = issues.length === 0;
       const summary = `Loaded ${issues.length} issue${issues.length === 1 ? '' : 's'} from ${escape(file.name)}`;
       flash(summary, issues.length > 0 ? 'info' : 'warn');
+      await renderUrlList();
     } catch (err) {
       cachedReport = null;
       $('run-recheck').disabled = true;
       flash(`Couldn't parse report: ${err.message || err}`, 'fail');
+      $('url-block').hidden = true;
     }
   });
+
+  // Render the URL navigator. Each row = one (origin+pathname) bucket with
+  // an issue count and a one-click "Open & re-check" button. The bucket that
+  // matches the active tab is highlighted; its button reads "Re-check now"
+  // because there's nothing to navigate to.
+  async function renderUrlList() {
+    const block = $('url-block');
+    const list = $('url-list');
+    if (!cachedReport || !window.QA?.issueRecheck?.groupIssuesByUrl) {
+      block.hidden = true;
+      return;
+    }
+    const groups = window.QA.issueRecheck.groupIssuesByUrl(cachedReport);
+    if (!groups.length) {
+      block.hidden = true;
+      return;
+    }
+    let currentUrl = '';
+    try {
+      const tab = await activeTab();
+      currentUrl = tab.url || '';
+    } catch { /* ignore */ }
+    const currentKey = (() => {
+      try { const u = new URL(currentUrl); return `${u.origin}${u.pathname}`; }
+      catch { return ''; }
+    })();
+
+    list.innerHTML = '';
+    for (const g of groups) {
+      const isCurrent = g.url && g.url === currentKey;
+      const li = document.createElement('li');
+      if (isCurrent) li.classList.add('current');
+      li.innerHTML = `
+        <div class="url-info">
+          <span class="path" title="${escape(g.url || '(no url)')}">${escape(g.pathname || '(no url)')}</span>
+          <span class="host">${escape(g.hostname || '—')}</span>
+        </div>
+        <span class="count-badge" title="${g.count} issue${g.count === 1 ? '' : 's'} at this URL">${g.count}</span>
+        ${isCurrent
+          ? `<span class="current-tab-tag" title="Active tab matches this URL">on tab</span>`
+          : ''}
+        <button class="open-btn" data-url="${escape(g.url || '')}" ${!g.url ? 'disabled' : ''}>
+          ${isCurrent ? 'Re-check now' : 'Open & re-check'}
+        </button>
+      `;
+      const btn = li.querySelector('.open-btn');
+      btn?.addEventListener('click', () => navigateAndRecheck(g.url, btn));
+      list.appendChild(li);
+    }
+    block.hidden = false;
+  }
+
+  // Navigate the active tab to `url` (if not already there), wait for the page
+  // to finish loading, then run the re-check. Result rendering filters to just
+  // the issues at this URL so the list isn't drowned out by OUT_OF_SCOPE rows.
+  async function navigateAndRecheck(targetUrl, btn) {
+    if (!cachedReport || !targetUrl) return;
+    const allBtns = document.querySelectorAll('#url-list .open-btn');
+    allBtns.forEach((b) => b.disabled = true);
+    const origLabel = btn?.textContent;
+    if (btn) btn.textContent = 'Loading…';
+    try {
+      const tab = await activeTab();
+      let needsNav = true;
+      try {
+        const cur = new URL(tab.url || '');
+        const want = new URL(targetUrl);
+        needsNav = cur.origin !== want.origin || cur.pathname !== want.pathname;
+      } catch { needsNav = true; }
+
+      if (needsNav) {
+        await navigateTabAndWait(tab.id, targetUrl);
+      }
+
+      // Tab may have just navigated — content script reinjected automatically
+      // by the manifest. Give it a single rAF-equivalent before messaging.
+      await sleep(150);
+
+      const resp = await sendToTab(tab.id, {
+        type: MSG.ISSUE_RECHECK_RUN,
+        payload: { report: cachedReport }
+      });
+      if (!resp || resp.error) {
+        flash(`Re-check failed: ${resp?.error || 'no response'}.`, 'fail');
+        return;
+      }
+      lastResult = resp.result;
+      renderResult(lastResult);
+      // Re-paint URL list so the new active URL highlights correctly.
+      await renderUrlList();
+    } catch (e) {
+      flash(`Couldn't navigate: ${e.message || e}.`, 'fail');
+    } finally {
+      allBtns.forEach((b) => b.disabled = false);
+      if (btn && origLabel) btn.textContent = origLabel;
+    }
+  }
+
+  function navigateTabAndWait(tabId, url, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+      const onUpdate = (id, info, _tab) => {
+        if (id !== tabId) return;
+        if (info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(onUpdate);
+          clearTimeout(timer);
+          resolve();
+        }
+      };
+      const timer = setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(onUpdate);
+        reject(new Error('navigation timed out'));
+      }, timeoutMs);
+      chrome.tabs.onUpdated.addListener(onUpdate);
+      chrome.tabs.update(tabId, { url }, (updated) => {
+        if (chrome.runtime.lastError) {
+          chrome.tabs.onUpdated.removeListener(onUpdate);
+          clearTimeout(timer);
+          reject(new Error(chrome.runtime.lastError.message));
+        }
+        // If the tab is already at the URL, onUpdated may not fire 'complete'
+        // again — but we only call this when needsNav was true, so trust it.
+      });
+    });
+  }
+
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
   $('run-recheck').addEventListener('click', async () => {
     if (!cachedReport) return;
@@ -125,9 +253,14 @@
     const broken  = counts.STILL_BROKEN || 0;
     const stale   = counts.STALE_SELECTOR || 0;
     const oos     = counts.OUT_OF_SCOPE || 0;
+    const wrong   = counts.WRONG_PATH || 0;
     const noExp   = counts.NO_EXPECTED || 0;
-    $('result-summary').textContent =
-      `${fixed} fixed · ${broken} still broken · ${stale} stale · ${oos} out-of-scope · ${noExp} no-expected`;
+    const parts = [
+      `${fixed} fixed`, `${broken} still broken`, `${stale} stale`,
+      wrong > 0 ? `${wrong} wrong-path` : null,
+      `${oos} out-of-scope`, `${noExp} no-expected`
+    ].filter(Boolean);
+    $('result-summary').textContent = parts.join(' · ');
 
     const list = $('result-list');
     list.innerHTML = '';
@@ -196,6 +329,7 @@
       REGRESSED: 'REGRESS',
       STALE_SELECTOR: 'STALE',
       OUT_OF_SCOPE: 'OUT-SCOPE',
+      WRONG_PATH: 'WRONG-PATH',
       PARTIAL: 'PARTIAL',
       NO_EXPECTED: 'NO-EXP'
     })[v] || v;

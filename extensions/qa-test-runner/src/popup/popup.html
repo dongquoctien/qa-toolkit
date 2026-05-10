@@ -8,7 +8,7 @@
 <body>
   <header>
     <h1>QA Test Runner</h1>
-    <span class="version" title="qa-test-runner version">v0.1.0</span>
+    <span class="version" title="qa-test-runner version">v0.1.1</span>
   </header>
 
   <section class="row row-import">
@@ -17,6 +17,14 @@
       <input id="report-file" type="file" accept=".zip,.json,application/zip,application/json" />
     </label>
     <p class="hint">Export from <strong>QA Annotator</strong> popup → JSON or ZIP. ZIP is fine — we read the inner JSON.</p>
+  </section>
+
+  <section id="url-block" class="row" hidden>
+    <div class="result-header">
+      <strong>Issue locations</strong>
+      <span class="muted">Click <em>Open & re-check</em> to navigate the active tab.</span>
+    </div>
+    <ul id="url-list"></ul>
   </section>
 
   <section class="row row-actions">
@@ -47,6 +55,8 @@
 
   <script src="../lib/messages.js"></script>
   <script src="../lib/zip-store.js"></script>
+  <script src="../lib/property-normalize.js"></script>
+  <script src="../lib/issue-recheck.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

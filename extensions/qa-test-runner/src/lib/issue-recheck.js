@@ -31,6 +31,7 @@
     REGRESSED:      'REGRESSED',
     STALE_SELECTOR: 'STALE_SELECTOR',
     OUT_OF_SCOPE:   'OUT_OF_SCOPE',
+    WRONG_PATH:     'WRONG_PATH',
     PARTIAL:        'PARTIAL',
     NO_EXPECTED:    'NO_EXPECTED'
   };
@@ -63,20 +64,33 @@
   }
 
   function checkOne(issue, currentUrl) {
-    // Same-origin gate.
+    // Same-origin gate + same-pathname soft check.
+    // Hostname mismatch is a hard skip (different env entirely).
+    // Pathname mismatch is a soft warn — selector may still match on a SPA
+    // that mounts the same component on multiple routes; we run the check
+    // but tag the result as WRONG_PATH if the selector doesn't resolve, so
+    // the user gets a clearer signal than "STALE_SELECTOR" (which sounds
+    // like the element was renamed in code).
     const issueUrl = issue.context?.url;
+    let wrongPath = false;
+    let issuePath = null, currentPath = null;
     if (issueUrl) {
       try {
         const a = new URL(issueUrl);
         const b = new URL(currentUrl);
+        issuePath = a.pathname;
+        currentPath = b.pathname;
         if (a.hostname !== b.hostname) {
           return {
             issueId: issue.id,
             verdict: VERDICT.OUT_OF_SCOPE,
             reason: `Issue recorded on ${a.hostname}; current tab is ${b.hostname}.`,
-            issuePath: a.pathname,
-            currentPath: b.pathname
+            issuePath, currentPath,
+            title: issue.title
           };
+        }
+        if (a.pathname !== b.pathname) {
+          wrongPath = true;
         }
       } catch {
         // URL parse fail — let it through; resolveElement will catch
@@ -99,11 +113,18 @@
     // Resolve element on the current page.
     const hit = resolveElement(issue);
     if (!hit) {
+      // STALE on the right path is "element gone / renamed".
+      // STALE on a different path is most likely "wrong page" — different
+      // verdict so the user knows to navigate before treating the report as
+      // a code regression.
       return {
         issueId: issue.id,
-        verdict: VERDICT.STALE_SELECTOR,
-        reason: 'None of the issue selectors resolved on this page.',
+        verdict: wrongPath ? VERDICT.WRONG_PATH : VERDICT.STALE_SELECTOR,
+        reason: wrongPath
+          ? `Issue was logged on ${issuePath}; current tab is on ${currentPath}. Navigate to the right page before re-checking.`
+          : 'None of the issue selectors resolved on this page.',
         triedSelectors: (issue.elements || []).map((e) => e.selector).filter(Boolean),
+        issuePath, currentPath,
         title: issue.title
       };
     }
@@ -158,7 +179,12 @@
       hitSelector: hit.selector,
       hitIdx: hit.idx,
       props,
-      summary: { total: props.length, passed, failed }
+      summary: { total: props.length, passed, failed },
+      // Soft warning: selector matched even though tab is on a different path.
+      // Result is still meaningful (SPA route reuse, layout shells, etc.) but
+      // the user should sanity-check before trusting it.
+      pathWarning: wrongPath || undefined,
+      issuePath, currentPath
     };
   }
 
@@ -177,7 +203,47 @@
     };
   }
 
+  // Group issues by URL so the popup can render a "where to run" list.
+  // Returns an array of { url, hostname, pathname, count, issueIds[] } sorted
+  // by descending count then path.
+  function groupIssuesByUrl(report) {
+    const issues = report?.report?.issues || [];
+    const map = new Map();
+    for (const iss of issues) {
+      const u = iss.context?.url;
+      if (!u) {
+        // Bucket urlless issues under a sentinel — they'll show as a separate
+        // group the user can decide what to do with (rare; manual-capture
+        // issues without a context.url).
+        const key = '(no url)';
+        const entry = map.get(key) || { url: null, hostname: null, pathname: null, count: 0, issueIds: [] };
+        entry.count++;
+        entry.issueIds.push(iss.id);
+        map.set(key, entry);
+        continue;
+      }
+      let parsed;
+      try { parsed = new URL(u); } catch { parsed = null; }
+      // Bucket key strips query+hash so /foo?a=1 and /foo?a=2 group together.
+      const key = parsed ? `${parsed.origin}${parsed.pathname}` : u;
+      const entry = map.get(key) || {
+        url: key,
+        hostname: parsed?.hostname || null,
+        pathname: parsed?.pathname || null,
+        count: 0,
+        issueIds: []
+      };
+      entry.count++;
+      entry.issueIds.push(iss.id);
+      map.set(key, entry);
+    }
+    return [...map.values()].sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return String(a.pathname || '').localeCompare(String(b.pathname || ''));
+    });
+  }
+
   const target = (typeof self !== 'undefined' ? self : window);
   target.QA = target.QA || {};
-  target.QA.issueRecheck = { VERDICT, checkAll, checkOne, readComputed, resolveElement };
+  target.QA.issueRecheck = { VERDICT, checkAll, checkOne, readComputed, resolveElement, groupIssuesByUrl };
 })();

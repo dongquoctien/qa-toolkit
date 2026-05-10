@@ -132,6 +132,7 @@ button.ghost:disabled { opacity: 0.55; cursor: not-allowed; }
 .verdict-OUT_OF_SCOPE   { background: var(--qa-muted); }
 .verdict-PARTIAL        { background: var(--qa-warn); }
 .verdict-NO_EXPECTED    { background: var(--qa-info); }
+.verdict-WRONG_PATH     { background: var(--qa-warn); }
 
 .issue-meta {
   flex: 1; min-width: 0;
@@ -177,6 +178,74 @@ button.ghost:disabled { opacity: 0.55; cursor: not-allowed; }
 .props-table td.match    { color: var(--qa-pass); }
 .props-table td.mismatch { color: var(--qa-fail); }
 .props-table code { font: 10px ui-monospace, monospace; }
+
+/* URL list — shown after report load, lets user pick which page to navigate to */
+#url-list {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+#url-list li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+}
+#url-list li.current {
+  border-color: var(--qa-accent);
+  background: color-mix(in srgb, var(--qa-accent) 6%, #fff);
+}
+#url-list .url-info {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+#url-list .url-info .path {
+  font: 600 12px ui-monospace, SFMono-Regular, monospace;
+  color: #111827;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#url-list .url-info .host {
+  font-size: 10px; color: var(--qa-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#url-list .count-badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--qa-accent);
+  color: #fff;
+  font: 600 10px/1.4 -apple-system, system-ui, sans-serif;
+}
+#url-list .open-btn {
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+#url-list .open-btn:hover {
+  border-color: var(--qa-accent);
+  color: var(--qa-accent);
+}
+#url-list .open-btn:disabled {
+  opacity: 0.55; cursor: wait;
+}
+.current-tab-tag {
+  font: 600 9px/1 -apple-system, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--qa-accent);
+  background: color-mix(in srgb, var(--qa-accent) 12%, #fff);
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
 
 footer {
   padding: 10px 14px;

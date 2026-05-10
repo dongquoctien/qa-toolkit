@@ -296,7 +296,8 @@ follow-up tickets.
 | Version | Features | Estimate |
 |---|---|---|
 | **v0.0.1** *(scaffold)* | Folder structure, manifest, module placeholders, README | ✅ done |
-| **v0.1.0** *(this release)* | Issue re-check: import qa-report-v1 ZIP/JSON → resolve selector on current tab → diff expected vs current computed styles → emit FIXED / STILL_BROKEN / STALE_SELECTOR / OUT_OF_SCOPE / NO_EXPECTED. Popup with file picker, expandable per-property table, JSON export of result. Recorder/player still placeholders. | ✅ done |
+| **v0.1.0** | Issue re-check: import qa-report-v1 ZIP/JSON → resolve selector on current tab → diff expected vs current computed styles → emit FIXED / STILL_BROKEN / STALE_SELECTOR / OUT_OF_SCOPE / NO_EXPECTED. Popup with file picker, expandable per-property table, JSON export. | ✅ done |
+| **v0.1.1** *(this release)* | URL navigator UX: report load auto-renders an "Issue locations" list grouped by URL with per-URL **Open & re-check** buttons that navigate the active tab + wait for load + run the check. New `WRONG_PATH` verdict warns when same-host but different-pathname. | ✅ done |
 | **v0.2.0** | Recorder (click + type + navigate + assertions), basic player, suite list in popup, save sequence to chrome.storage / suite file | 2–3 sessions |
 | **v0.2.0** | Player (replay + assertions), cross-env URL substitution, run-result storage in IndexedDB, basic report popup | 2–3 sessions |
 | **v0.3.0** | Side-panel report UI with screenshot diff, suite import/export `<project>/docs/qa/test-suites/`, drift dashboard | 2 sessions |
@@ -325,18 +326,21 @@ follow-up tickets.
 3. Pin **QA Test Runner** to the toolbar
 4. Optional: install qa-annotator alongside for full toolkit
 
-## Usage (v0.1.0)
+## Usage (v0.1.1)
 
 1. In qa-annotator, after logging issues, click **Export ZIP** (or JSON) from
    the popup.
-2. Open the target site (any environment — dev, stg, prod) and navigate to
-   where the issue was originally logged. The extension matches by hostname
-   and selector — different host returns `OUT_OF_SCOPE`.
-3. Click the **QA Test Runner** toolbar icon → pick the report file → click
-   **Re-check on this tab**.
-4. Each issue gets a verdict chip. Expand a row to see per-property `expected`
+2. Open the target site (any environment — dev, stg, prod). Any page is fine —
+   you'll pick the right one in step 4.
+3. Click the **QA Test Runner** toolbar icon → pick the report file.
+4. **Issue locations** list appears, grouped by URL. Each row shows the path,
+   hostname, and issue count. Click **Open & re-check** next to any URL — the
+   extension navigates the active tab there, waits for page load, and runs
+   the check automatically. Or click **Re-check on this tab** to use whatever
+   URL is currently open.
+5. Each issue gets a verdict chip. Expand a row to see per-property `expected`
    vs `current` values side-by-side.
-5. Click **Export JSON** to save the result as `qa-recheck-v1.json` for
+6. Click **Export JSON** to save the result as `qa-recheck-v1.json` for
    archival or follow-up Jira sync.
 
 ### Verdicts at a glance
@@ -345,7 +349,8 @@ follow-up tickets.
 |---|---|
 | `FIXED` | Every expected CSS row now matches the live computed value. |
 | `BROKEN` | At least one row mismatches. The recorded broken value is still present (or has drifted to a different wrong value). |
-| `STALE` | None of the issue's selectors resolved on the page. The element was renamed/removed or the tab is on the wrong route. |
+| `STALE` | None of the issue's selectors resolved on the page. The element was renamed/removed. |
+| `WRONG-PATH` | Same hostname, different pathname — selector didn't resolve. Probably wrong page; navigate via the **Issue locations** list and try again. |
 | `OUT-SCOPE` | Issue was logged on a different hostname. Open the right environment first. |
 | `NO-EXP` | Issue has no expected CSS rows to verify (only Figma link or pin notes). Skipped. |
 
