@@ -76,6 +76,81 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
   flex-direction: column !important;
   overflow: hidden !important;
   animation: qa-pop 160ms cubic-bezier(.2,.8,.2,1) !important;
+  position: relative !important;  /* anchor for .qa-modal-toc rail */
+}
+
+/* Right-rail TOC — vertical strip of dots, hover expands labels. Absolute so
+   it doesn't push the body width. Positioned just inside the right edge of
+   the modal, vertically centered. Hidden when fewer than 3 sections render
+   (set in JS by leaving innerHTML empty). */
+.qa-ext-ui .qa-modal-toc {
+  position: absolute !important;
+  right: 6px !important;
+  top: 64px !important;  /* below header */
+  bottom: 56px !important;  /* above footer */
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  z-index: 2 !important;
+  pointer-events: none !important;  /* dots take pointer-events back */
+}
+.qa-ext-ui .qa-modal-toc:empty { display: none !important; }
+.qa-ext-ui .qa-toc-item {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 4px 6px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif !important;
+  color: var(--qa-muted) !important;
+  transition: background 100ms ease, color 100ms ease !important;
+}
+.qa-ext-ui .qa-toc-dot {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: var(--qa-line) !important;
+  flex-shrink: 0 !important;
+  transition: background 100ms ease, transform 100ms ease !important;
+}
+.qa-ext-ui .qa-toc-label {
+  max-width: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  opacity: 0 !important;
+  transition: max-width 160ms ease, opacity 120ms ease !important;
+}
+.qa-ext-ui .qa-modal-toc:hover .qa-toc-label,
+.qa-ext-ui .qa-toc-item:focus-visible .qa-toc-label,
+.qa-ext-ui .qa-toc-item.is-active .qa-toc-label {
+  max-width: 140px !important;
+  opacity: 1 !important;
+}
+.qa-ext-ui .qa-modal-toc:hover .qa-toc-item,
+.qa-ext-ui .qa-toc-item:focus-visible {
+  background: var(--qa-soft) !important;
+}
+.qa-ext-ui .qa-toc-item.is-active {
+  color: var(--qa-accent) !important;
+  background: color-mix(in srgb, var(--qa-accent) 8%, transparent) !important;
+}
+.qa-ext-ui .qa-toc-item.is-active .qa-toc-dot {
+  background: var(--qa-accent) !important;
+  transform: scale(1.4) !important;
+}
+.qa-ext-ui .qa-toc-item:hover .qa-toc-dot { background: var(--qa-accent) !important; }
+
+/* Reserve right padding inside body so content doesn't slide under TOC */
+.qa-ext-ui .qa-modal-body { padding-right: 28px !important; }
+@media (max-width: 480px) {
+  .qa-ext-ui .qa-modal-toc { display: none !important; }
+  .qa-ext-ui .qa-modal-body { padding-right: 18px !important; }
 }
 @keyframes qa-pop { from { transform: translateY(8px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
 
@@ -273,16 +348,40 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
   font-weight: 500 !important;
   margin-bottom: 12px !important;
 }
+/* Draft-restore variant — neutral blue so it doesn't look like an error */
+.qa-ext-ui .qa-validation-banner.qa-draft-banner {
+  background: #eff6ff !important;
+  color: #1e40af !important;
+  border-color: #bfdbfe !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+.qa-ext-ui .qa-draft-banner .qa-link-btn {
+  background: transparent !important;
+  border: 0 !important;
+  color: #1e40af !important;
+  font-weight: 600 !important;
+  padding: 2px 6px !important;
+  cursor: pointer !important;
+  text-decoration: underline !important;
+}
+.qa-ext-ui .qa-draft-banner .qa-link-btn:hover {
+  background: rgba(30, 64, 175, 0.08) !important;
+  border-radius: 4px !important;
+}
 .qa-ext-ui .qa-required-error,
 .qa-ext-ui .qa-required-error input,
 .qa-ext-ui .qa-required-error select,
-.qa-ext-ui .qa-required-error textarea {
+.qa-ext-ui .qa-required-error textarea,
+.qa-ext-ui .qa-required-error.qa-sev-pill {
   border-color: #ef4444 !important;
   outline: 2px solid color-mix(in srgb, #ef4444 25%, transparent) !important;
   outline-offset: 1px !important;
 }
 
-/* Severity flash on hotkey press */
+/* Severity flash on hotkey press — applied to .qa-sev-pill (segmented control) */
 .qa-ext-ui .qa-flash {
   animation: qa-sev-flash 280ms ease !important;
 }
@@ -290,6 +389,94 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
   0%   { box-shadow: 0 0 0 0 var(--qa-accent); }
   60%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--qa-accent) 30%, transparent); }
   100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Severity segmented pill — replaces the <select> dropdown. Each segment carries
+   its own severity color so the active state reads at a glance. Hotkey badge
+   ("1".."4") sits subscript on the right of each label. */
+.qa-ext-ui .qa-sev-pill {
+  display: inline-flex !important;
+  align-items: stretch !important;
+  border: 1px solid var(--qa-line) !important;
+  border-radius: var(--qa-radius-sm) !important;
+  background: var(--qa-bg) !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  transition: box-shadow 100ms ease !important;
+}
+.qa-ext-ui .qa-sev-btn {
+  flex: 1 1 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 8px 6px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-right: 1px solid var(--qa-line) !important;
+  font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif !important;
+  color: var(--qa-muted) !important;
+  cursor: pointer !important;
+  text-transform: capitalize !important;
+  letter-spacing: 0.02em !important;
+  transition: background 100ms ease, color 100ms ease !important;
+  min-width: 0 !important;
+}
+.qa-ext-ui .qa-sev-btn:last-of-type { border-right: 0 !important; }
+.qa-ext-ui .qa-sev-btn:hover {
+  background: var(--qa-soft) !important;
+  color: var(--qa-fg) !important;
+}
+.qa-ext-ui .qa-sev-btn:focus-visible {
+  outline: 2px solid var(--qa-accent) !important;
+  outline-offset: -2px !important;
+  z-index: 1 !important;
+}
+.qa-ext-ui .qa-sev-dot {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: var(--qa-line) !important;
+  flex-shrink: 0 !important;
+}
+.qa-ext-ui .qa-sev-btn[data-sev="critical"] .qa-sev-dot { background: #ef4444 !important; }
+.qa-ext-ui .qa-sev-btn[data-sev="major"]    .qa-sev-dot { background: #f97316 !important; }
+.qa-ext-ui .qa-sev-btn[data-sev="minor"]    .qa-sev-dot { background: #eab308 !important; }
+.qa-ext-ui .qa-sev-btn[data-sev="info"]     .qa-sev-dot { background: #3b82f6 !important; }
+
+.qa-ext-ui .qa-sev-label { white-space: nowrap !important; }
+.qa-ext-ui .qa-sev-hk {
+  font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  color: var(--qa-muted) !important;
+  background: var(--qa-soft-2) !important;
+  padding: 2px 4px !important;
+  border-radius: 3px !important;
+  margin-left: 2px !important;
+}
+
+/* Active segment — fill with severity color */
+.qa-ext-ui .qa-sev-btn.is-active {
+  color: #fff !important;
+}
+.qa-ext-ui .qa-sev-btn.is-active .qa-sev-dot {
+  background: #fff !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.4) !important;
+}
+.qa-ext-ui .qa-sev-btn.is-active .qa-sev-hk {
+  background: rgba(255,255,255,0.22) !important;
+  color: #fff !important;
+}
+.qa-ext-ui .qa-sev-btn[data-sev="critical"].is-active { background: #ef4444 !important; }
+.qa-ext-ui .qa-sev-btn[data-sev="major"].is-active    { background: #f97316 !important; }
+.qa-ext-ui .qa-sev-btn[data-sev="minor"].is-active    { background: #eab308 !important; color: #111827 !important; }
+.qa-ext-ui .qa-sev-btn[data-sev="minor"].is-active .qa-sev-hk { background: rgba(0,0,0,0.18) !important; color: #111827 !important; }
+.qa-ext-ui .qa-sev-btn[data-sev="info"].is-active     { background: #3b82f6 !important; }
+
+/* Compact mode for narrow modal — hide hotkey on first two segments first */
+@media (max-width: 480px) {
+  .qa-ext-ui .qa-sev-hk { display: none !important; }
+  .qa-ext-ui .qa-sev-label { font-size: 11px !important; }
 }
 
 /* Auto-tag chips under the title — small, neutral, non-editable for v0.2.0 */
@@ -1502,3 +1689,21 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
 }
 .qa-ext-ui .qa-if-radios label { display: inline-flex !important; gap: 4px !important; align-items: center !important; cursor: pointer !important; font-weight: 400 !important; }
 .qa-ext-ui .qa-if-radios input[type=radio] { accent-color: var(--qa-accent) !important; }
+
+/* ============== A11Y FOCUS RING (v0.6.0) ==============
+   Universal :focus-visible ring for buttons + interactive elements that don't
+   already define their own focus styles. Mouse clicks (no :focus-visible match)
+   stay clean; keyboard navigation gets a clear accent ring. */
+.qa-ext-ui button:focus-visible,
+.qa-ext-ui [role="button"]:focus-visible,
+.qa-ext-ui [tabindex]:not([tabindex="-1"]):focus-visible,
+.qa-ext-ui a:focus-visible {
+  outline: 2px solid var(--qa-accent) !important;
+  outline-offset: 2px !important;
+  border-radius: var(--qa-radius-sm) !important;
+}
+/* Modal close button — small icon button, ring inset so it doesn't clip header */
+.qa-ext-ui .qa-icon-btn:focus-visible {
+  outline: 2px solid var(--qa-accent) !important;
+  outline-offset: -1px !important;
+}

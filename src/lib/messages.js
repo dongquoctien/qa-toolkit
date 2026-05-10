@@ -35,7 +35,12 @@
     FIGMA_TREE_GET:     'qa/figma-tree/get',
     FIGMA_TREE_LIST:    'qa/figma-tree/list',
     FIGMA_TREE_IMPORT:  'qa/figma-tree/import',
-    FIGMA_TREE_DELETE:  'qa/figma-tree/delete'
+    FIGMA_TREE_DELETE:  'qa/figma-tree/delete',
+
+    // draft auto-save — modal mid-edit state, keyed by issue id
+    DRAFT_GET:          'qa/draft/get',
+    DRAFT_SAVE:         'qa/draft/save',
+    DRAFT_CLEAR:        'qa/draft/clear'
   };
 
   const SEVERITIES = ['critical', 'major', 'minor', 'info'];

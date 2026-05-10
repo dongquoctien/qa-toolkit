@@ -27,6 +27,13 @@
 
   function open(issue, opts = {}) {
     return new Promise((resolve) => {
+      // Capture the trigger element so we can restore focus when the modal
+      // closes — standard a11y pattern. Without this, screen-reader / keyboard
+      // users land back at the document root after Save/Cancel.
+      const triggerElement = document.activeElement && document.activeElement !== document.body
+        ? document.activeElement
+        : null;
+
       const overlay = document.createElement('div');
       overlay.className = 'qa-ext-ui qa-modal-overlay';
       overlay.innerHTML = renderHtml(issue, opts);
@@ -61,11 +68,44 @@
       // const-declared handlers (onPaste / onKey are declared lower in this
       // function; an early finish() call would crash trying to read them).
       const cleanups = [];
+      // When finish(result) is called with a non-null result we treat it as a
+      // successful Save and clear the draft. null = cancel/dismiss → keep draft
+      // so the user can recover next time they open this issue.
       const finish = (result) => {
         for (const fn of cleanups) { try { fn(); } catch {} }
         overlay.remove();
+        if (triggerElement) {
+          try { triggerElement.focus({ preventScroll: true }); } catch {}
+        }
+        if (result && issue.id) {
+          try { chrome.runtime.sendMessage({ type: QA.MSG.DRAFT_CLEAR, payload: issue.id }); } catch {}
+        }
         resolve(result);
       };
+
+      // Focus trap — Tab cycles inside the overlay only. Without this, focus
+      // escapes to the host page (which the modal visually covers but doesn't
+      // own), confusing keyboard users. Recompute focusables every keystroke
+      // because panels mount async and screenshots can be added after open.
+      const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      const onTrap = (e) => {
+        if (e.key !== 'Tab') return;
+        const items = Array.from(overlay.querySelectorAll(FOCUSABLE_SEL))
+          .filter((el) => el.offsetParent !== null || el === document.activeElement);
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      };
+      document.addEventListener('keydown', onTrap, true);
+      cleanups.push(() => document.removeEventListener('keydown', onTrap, true));
 
       // Required fields gate, settings-driven. Any of: title, severity,
       // expected, screenshot. When the validate fails we DON'T finish — we
@@ -97,7 +137,7 @@
         })();
         const hasFigma = !!($('.qa-figma-link')?.value?.trim());
         if (isReq('title')       && !titleVal)         errors.push({ field: 'title',       sel: '.qa-title' });
-        if (isReq('severity')    && !severityVal)      errors.push({ field: 'severity',    sel: '.qa-severity' });
+        if (isReq('severity')    && !severityVal)      errors.push({ field: 'severity',    sel: '.qa-sev-pill' });
         if (isReq('type')        && !typeVal)          errors.push({ field: 'type',        sel: '.qa-type' });
         if (isReq('note')        && !noteVal)          errors.push({ field: 'note',        sel: '.qa-note' });
         if (isReq('expectedCss') && !hasExpectedCss)   errors.push({ field: 'expected CSS', sel: '.qa-expected-pane' });
@@ -121,12 +161,70 @@
       function hideValidation() {
         overlay.querySelectorAll('.qa-required-error').forEach((el) => el.classList.remove('qa-required-error'));
         const banner = overlay.querySelector('.qa-validation-banner');
-        if (banner) { banner.hidden = true; banner.textContent = ''; }
+        // Don't wipe the draft-restore prompt — that banner reuses the same
+        // element but conveys a different action and shouldn't auto-dismiss
+        // on the first keystroke.
+        if (banner && !banner.classList.contains('qa-draft-banner')) {
+          banner.hidden = true;
+          banner.textContent = '';
+        }
       }
       // Re-validate on input so the user sees errors clear as they type.
       overlay.addEventListener('input', hideValidation);
 
-      $$('.qa-cancel').forEach((btn) => btn.addEventListener('click', () => finish(null)));
+      // Severity pill — clicking a segment updates the hidden input + visual
+       // active state, then dispatches a 'change' so listeners (e.g. validation
+       // re-render) react. Hotkey path also routes through setSeverity so the
+       // flash + aria-checked stay in sync.
+       function setSeverity(sev, flash) {
+         const hidden = $('.qa-severity');
+         if (!hidden) return;
+         if (hidden.value !== sev) {
+           hidden.value = sev;
+           hidden.dispatchEvent(new Event('change', { bubbles: true }));
+         }
+         const pill = overlay.querySelector('.qa-sev-pill');
+         if (!pill) return;
+         pill.querySelectorAll('.qa-sev-btn').forEach((btn) => {
+           const isActive = btn.dataset.sev === sev;
+           btn.setAttribute('aria-checked', String(isActive));
+           btn.tabIndex = isActive ? 0 : -1;
+           btn.classList.toggle('is-active', isActive);
+         });
+         if (flash) {
+           pill.classList.remove('qa-flash');
+           // Force reflow so re-adding the class restarts the animation.
+           void pill.offsetWidth;
+           pill.classList.add('qa-flash');
+           setTimeout(() => pill.classList.remove('qa-flash'), 320);
+         }
+       }
+       overlay.querySelectorAll('.qa-sev-btn').forEach((btn) => {
+         btn.addEventListener('click', (e) => {
+           e.preventDefault();
+           setSeverity(btn.dataset.sev, false);
+         });
+         // Arrow-key nav within the radiogroup — standard a11y pattern.
+         btn.addEventListener('keydown', (e) => {
+           const sevs = (self.QA?.SEVERITIES || ['critical','major','minor','info']);
+           const idx = sevs.indexOf(btn.dataset.sev);
+           if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+             e.preventDefault();
+             setSeverity(sevs[(idx + 1) % sevs.length], false);
+             overlay.querySelector(`.qa-sev-btn[data-sev="${sevs[(idx + 1) % sevs.length]}"]`)?.focus();
+           } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+             e.preventDefault();
+             const prev = (idx - 1 + sevs.length) % sevs.length;
+             setSeverity(sevs[prev], false);
+             overlay.querySelector(`.qa-sev-btn[data-sev="${sevs[prev]}"]`)?.focus();
+           }
+         });
+       });
+       // Make setSeverity reachable from the keydown closure declared above.
+       // (It's a function declaration so hoisting works, but exposing on the
+       // overlay isn't necessary — keep it local.)
+
+       $$('.qa-cancel').forEach((btn) => btn.addEventListener('click', () => finish(null)));
       overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
       $('.qa-save').addEventListener('click', () => {
         harvestActivePane(overlay, expectedModel);
@@ -134,7 +232,11 @@
         if (errors.length > 0) {
           showValidationErrors(errors);
           const first = $(errors[0].sel);
-          if (first && first.focus) first.focus();
+          // Pill is a div (not focusable) — focus its first button instead.
+          const focusable = first?.classList?.contains('qa-sev-pill')
+            ? first.querySelector('.qa-sev-btn')
+            : first;
+          if (focusable && focusable.focus) focusable.focus();
           return;
         }
         finish(harvest(overlay, issue, shots, expectedModel, opts));
@@ -158,14 +260,7 @@
         if (inField(tgt) || inField(active)) return;
         const mapped = sevHotkeys[e.key];
         if (mapped) {
-          const sel = $('.qa-severity');
-          if (sel) {
-            sel.value = mapped;
-            sel.dispatchEvent(new Event('change', { bubbles: true }));
-            // Brief flash so the user sees the change.
-            sel.classList.add('qa-flash');
-            setTimeout(() => sel.classList.remove('qa-flash'), 300);
-          }
+          setSeverity(mapped, /*flash*/ true);
         }
       };
       document.addEventListener('keydown', onKey, true);
@@ -197,8 +292,48 @@
       function refreshPinNotesPanel() {
         issue.screenshots = shots.slice();
         issue.screenshot = shots[0] || null;
-        const panelEl = overlay.querySelector('.qa-panel[data-panel-id="pin-notes"]');
+        let panelEl = overlay.querySelector('.qa-panel[data-panel-id="pin-notes"]');
         const pinPanel = self.QA?.panels?.['pin-notes'];
+        // Count pins so we know whether the panel SHOULD exist now.
+        let pinTotalForCheck = 0;
+        for (const s of shots) for (const l of (s?.annotations?.layers || [])) if (l.type === 'pin') pinTotalForCheck++;
+
+        // Lazy-mount: panel-registry skipped pin-notes during initial render
+        // because isAvailable() returned false (no pins yet). Once the user
+        // adds an annotated screenshot, inject the panel into the DOM so the
+        // notes UI appears without re-opening the modal.
+        if (!panelEl && pinTotalForCheck > 0 && pinPanel?.render) {
+          const panelsHost = overlay.querySelector('[data-qa-section="panels"]');
+          if (panelsHost) {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = `
+              <section class="qa-panel" data-panel-id="pin-notes">
+                <header class="qa-panel-head">
+                  <h3 class="qa-panel-title">${pinPanel.title || 'Pin notes'}</h3>
+                  <button type="button" class="qa-panel-toggle" aria-label="Toggle panel">▾</button>
+                </header>
+                <div class="qa-panel-body"></div>
+              </section>
+            `;
+            panelEl = wrapper.firstElementChild;
+            panelsHost.appendChild(panelEl);
+            // Wire the collapse toggle the same way panel-registry would.
+            const head = panelEl.querySelector('.qa-panel-head');
+            const toggleBtn = panelEl.querySelector('.qa-panel-toggle');
+            head.addEventListener('click', () => {
+              const isCollapsed = panelEl.dataset.collapsed === '1';
+              if (isCollapsed) { delete panelEl.dataset.collapsed; if (toggleBtn) toggleBtn.textContent = '▾'; }
+              else { panelEl.dataset.collapsed = '1'; if (toggleBtn) toggleBtn.textContent = '▸'; }
+            });
+            // Run the panel's mount() for textarea input forwarding.
+            if (typeof pinPanel.mount === 'function') {
+              try {
+                const cleanup = pinPanel.mount(panelEl.querySelector('.qa-panel-body'), issue, () => {});
+                if (typeof cleanup === 'function') cleanups.push(cleanup);
+              } catch (e) { console.warn('[QA] pin-notes lazy mount failed', e); }
+            }
+          }
+        }
         if (panelEl && pinPanel?.render) {
           const body = panelEl.querySelector('.qa-panel-body');
           if (body) body.innerHTML = pinPanel.render(issue) || '';
@@ -392,6 +527,102 @@
 
       renderGallery();
 
+      // ── Draft auto-save ──────────────────────────────────────────────
+      // Snapshot the modal's editable state (title/severity/type/note/figma
+      // /expected/panels) on every input/change, debounced 300ms. Screenshots
+      // are NOT included — they're large base64 blobs and the modal already
+      // mutates `shots[]` in place, so a restore would just re-render the
+      // gallery from issue.screenshots untouched.
+      function snapshotDraftState() {
+        const snap = {};
+        snap.title = $('.qa-title')?.value ?? '';
+        snap.severity = $('.qa-severity')?.value ?? '';
+        snap.type = $('.qa-type')?.value ?? '';
+        snap.note = $('.qa-note')?.value ?? '';
+        snap.figmaLink = $('.qa-figma-link')?.value ?? '';
+        // Expected CSS rows
+        const pane = $('.qa-expected-pane');
+        if (pane) {
+          snap.expectedRows = Array.from(pane.querySelectorAll('.qa-expected-row')).map((r) => ({
+            k: r.querySelector('.qa-exp-key')?.value || '',
+            v: r.querySelector('.qa-exp-val')?.value || ''
+          })).filter((r) => r.k || r.v);
+        }
+        return snap;
+      }
+      function applyDraftState(snap) {
+        if (!snap) return;
+        if (snap.title != null && $('.qa-title')) $('.qa-title').value = snap.title;
+        if (snap.type != null && $('.qa-type')) $('.qa-type').value = snap.type;
+        if (snap.note != null && $('.qa-note')) $('.qa-note').value = snap.note;
+        if (snap.figmaLink != null && $('.qa-figma-link')) $('.qa-figma-link').value = snap.figmaLink;
+        if (snap.severity && typeof setSeverity === 'function') setSeverity(snap.severity, false);
+        // Expected rows: leave the existing pane render alone if the draft
+        // has no rows; otherwise rebuild via the pane's input setters.
+        if (Array.isArray(snap.expectedRows) && snap.expectedRows.length) {
+          const pane = $('.qa-expected-pane');
+          const existing = pane?.querySelectorAll('.qa-expected-row') || [];
+          // Best-effort: overwrite as many rows as we have inputs for; users
+          // can use "+ Add property" to grow if the draft had more.
+          snap.expectedRows.forEach((row, i) => {
+            const target = existing[i];
+            if (target) {
+              const k = target.querySelector('.qa-exp-key');
+              const v = target.querySelector('.qa-exp-val');
+              if (k) k.value = row.k;
+              if (v) v.value = row.v;
+            }
+          });
+        }
+      }
+      let draftTimer = null;
+      const saveDraft = () => {
+        if (!issue.id) return;
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(() => {
+          try {
+            chrome.runtime.sendMessage({
+              type: QA.MSG.DRAFT_SAVE,
+              payload: { issueId: issue.id, snapshot: snapshotDraftState() }
+            });
+          } catch {}
+        }, 300);
+      };
+      overlay.addEventListener('input', saveDraft);
+      overlay.addEventListener('change', saveDraft);
+      cleanups.push(() => clearTimeout(draftTimer));
+
+      // Restore prompt — fetch any existing draft for this issue id; if it's
+      // newer than 5s and differs from the current state, show a non-blocking
+      // banner asking the user to Restore or Discard. Don't auto-apply: the
+      // current modal state may carry fresh data (e.g. just-picked element)
+      // that would be silently overwritten.
+      if (issue.id) {
+        try {
+          chrome.runtime.sendMessage({ type: QA.MSG.DRAFT_GET, payload: issue.id }, (draft) => {
+            if (!draft || !draft.snapshot) return;
+            const ageMs = Date.now() - (draft.savedAt || 0);
+            if (ageMs < 5000) return;  // fresh — probably same session, ignore
+            const banner = overlay.querySelector('.qa-validation-banner');
+            if (!banner) return;
+            const ageMin = Math.max(1, Math.round(ageMs / 60000));
+            banner.innerHTML = `Restore draft from ~${ageMin} min ago? <button type="button" class="qa-link-btn qa-draft-restore">Restore</button> · <button type="button" class="qa-link-btn qa-draft-discard">Discard</button>`;
+            banner.hidden = false;
+            banner.classList.add('qa-draft-banner');
+            banner.querySelector('.qa-draft-restore')?.addEventListener('click', () => {
+              applyDraftState(draft.snapshot);
+              banner.hidden = true;
+              banner.classList.remove('qa-draft-banner');
+            });
+            banner.querySelector('.qa-draft-discard')?.addEventListener('click', () => {
+              try { chrome.runtime.sendMessage({ type: QA.MSG.DRAFT_CLEAR, payload: issue.id }); } catch {}
+              banner.hidden = true;
+              banner.classList.remove('qa-draft-banner');
+            });
+          });
+        } catch {}
+      }
+
       // Mount mode-aware panels. Registry is optional — modal still renders
       // without it (the inline fallback in renderPanelsBlock fires).
       if (self.QA?.panelRegistry?.mountAll) {
@@ -399,7 +630,70 @@
         if (typeof panelsCleanup === 'function') cleanups.push(panelsCleanup);
       }
 
-      setTimeout(() => $('.qa-title')?.focus(), 0);
+      setTimeout(() => {
+        const titleInput = $('.qa-title');
+        if (titleInput) { titleInput.focus(); return; }
+        // Title hidden by form config — focus first focusable so a keyboard
+        // user lands inside the modal, not on the host page underneath.
+        const firstFocusable = overlay.querySelector(FOCUSABLE_SEL);
+        if (firstFocusable) firstFocusable.focus();
+      }, 0);
+
+      // Build the right-rail TOC. Panels mount async so wait one frame after
+      // open before querying [data-qa-section]. Each entry is a dot + label;
+      // hovering the strip expands the labels. Active section tracks via
+      // IntersectionObserver — whichever section overlaps the top third of
+      // the body wins the "active" highlight.
+      const SECTION_LABELS = {
+        title: 'Title',
+        severity: 'Severity / Type',
+        element: 'Element',
+        computed: 'Computed',
+        expected: 'Expected CSS',
+        figma: 'Figma',
+        note: 'Note',
+        panels: 'Panels',
+        screenshots: 'Screenshots'
+      };
+      requestAnimationFrame(() => {
+        const toc = overlay.querySelector('.qa-modal-toc');
+        const body = overlay.querySelector('.qa-modal-body');
+        if (!toc || !body) return;
+        const sections = Array.from(body.querySelectorAll('[data-qa-section]'))
+          .filter((s) => {
+            // Skip empty wrappers (panels block can be empty in some modes).
+            if (s.dataset.qaSection === 'panels' && !s.children.length) return false;
+            return true;
+          });
+        if (sections.length < 3) return;  // Not worth showing TOC for 1-2 sections.
+        toc.innerHTML = sections.map((s) => {
+          const id = s.dataset.qaSection;
+          return `<button type="button" class="qa-toc-item" data-target="${id}" title="${SECTION_LABELS[id] || id}">
+            <span class="qa-toc-dot"></span>
+            <span class="qa-toc-label">${SECTION_LABELS[id] || id}</span>
+          </button>`;
+        }).join('');
+        toc.addEventListener('click', (e) => {
+          const btn = e.target.closest('.qa-toc-item');
+          if (!btn) return;
+          const target = body.querySelector(`[data-qa-section="${btn.dataset.target}"]`);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        const items = new Map(
+          Array.from(toc.querySelectorAll('.qa-toc-item')).map((b) => [b.dataset.target, b])
+        );
+        const io = new IntersectionObserver((entries) => {
+          // Pick the topmost-visible section; mark its TOC item active.
+          const visible = entries.filter((e) => e.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          if (visible.length === 0) return;
+          const id = visible[0].target.dataset.qaSection;
+          for (const [, b] of items) b.classList.remove('is-active');
+          items.get(id)?.classList.add('is-active');
+        }, { root: body, rootMargin: '0px 0px -60% 0px', threshold: 0 });
+        for (const s of sections) io.observe(s);
+        cleanups.push(() => io.disconnect());
+      });
     });
   }
 
@@ -584,8 +878,28 @@
   function renderHtml(issue, opts = {}) {
     const sevs   = (self.QA?.SEVERITIES || ['critical','major','minor','info']);
     const types  = (self.QA?.ISSUE_TYPES || ['visual','content','i18n','a11y','interactive','broken']);
-    const sevOpts  = sevs.map((s) => `<option value="${s}" ${s===issue.severity?'selected':''}>${s}</option>`).join('');
     const typeOpts = types.map((t) => `<option value="${t}" ${t===issue.type?'selected':''}>${t}</option>`).join('');
+
+    // Severity pill — segmented radio replacing the dropdown. Hidden input keeps
+    // the .qa-severity class so harvest()/validate() read .value unchanged, and
+    // the existing hotkey handler can still dispatch a 'change' event on it.
+    const sevHotkeyMap = opts?.settings?.defaults?.severityHotkeys || { 1: 'critical', 2: 'major', 3: 'minor', 4: 'info' };
+    const hotkeyForSev = (sev) => Object.keys(sevHotkeyMap).find((k) => sevHotkeyMap[k] === sev) || '';
+    const currentSev = issue.severity || sevs[0];
+    const sevPill = `
+      <div class="qa-sev-pill" role="radiogroup" aria-label="Severity">
+        ${sevs.map((s) => {
+          const hk = hotkeyForSev(s);
+          const active = s === currentSev;
+          return `<button type="button" class="qa-sev-btn" data-sev="${s}" role="radio" aria-checked="${active}" tabindex="${active ? '0' : '-1'}" title="${s}${hk ? ` (hotkey ${hk})` : ''}">
+            <span class="qa-sev-dot"></span>
+            <span class="qa-sev-label">${s}</span>
+            ${hk ? `<span class="qa-sev-hk" aria-hidden="true">${hk}</span>` : ''}
+          </button>`;
+        }).join('')}
+        <input type="hidden" class="qa-severity" value="${escape(currentSev)}" />
+      </div>
+    `;
 
     // Manual-only issues have no element refs — skip element list entirely.
     const rawElements = issue.elements && issue.elements.length > 1 ? issue.elements : [issue.element];
@@ -639,9 +953,9 @@
       : '';
 
     return `
-      <div class="qa-modal" role="dialog" aria-label="QA issue">
+      <div class="qa-modal" role="dialog" aria-modal="true" aria-labelledby="qa-modal-label-${escape(issue.id)}">
         <header class="qa-modal-header">
-          <span class="qa-id-badge">${issue.id}</span>
+          <span class="qa-id-badge" id="qa-modal-label-${escape(issue.id)}">${issue.id}</span>
           ${modeChip}
           ${pinChip}
           <span class="qa-vp-chip" title="${escape(tooltipLines)}">${escape(chipText)}</span>
@@ -649,22 +963,24 @@
           <button class="qa-cancel qa-icon-btn" aria-label="Close">×</button>
         </header>
 
+        <nav class="qa-modal-toc" aria-label="Sections in this issue"></nav>
+
         <section class="qa-modal-body">
           <div class="qa-validation-banner" role="alert" hidden></div>
 
           ${fieldVisible(formCfg, 'title') ? `
-          <div class="qa-row">
+          <div class="qa-row" data-qa-section="title">
             <label>Title${fieldRequired(formCfg, 'title') ? ' <span class="qa-req">*</span>' : ''}</label>
             <input class="qa-title" type="text" placeholder="Short description" value="${escape(issue.title || '')}" />
             ${(issue.tags || []).length ? `<div class="qa-tags-row">${(issue.tags || []).map((t) => `<span class="qa-tag-chip">${escape(t)}</span>`).join('')}</div>` : ''}
           </div>` : ''}
 
           ${fieldVisible(formCfg, 'severity') || fieldVisible(formCfg, 'type') ? `
-          <div class="qa-row qa-row-2">
+          <div class="qa-row qa-row-2" data-qa-section="severity">
             ${fieldVisible(formCfg, 'severity') ? `
             <div>
               <label>Severity${fieldRequired(formCfg, 'severity') ? ' <span class="qa-req">*</span>' : ''}</label>
-              <select class="qa-severity">${sevOpts}</select>
+              ${sevPill}
             </div>` : ''}
             ${fieldVisible(formCfg, 'type') ? `
             <div>
@@ -674,19 +990,19 @@
           </div>` : ''}
 
           ${fieldVisible(formCfg, 'element') && hasElements ? `
-          <div class="qa-row">
+          <div class="qa-row" data-qa-section="element">
             <label>${elements.length > 1 ? `Elements (${elements.length})` : 'Element'}${fieldRequired(formCfg, 'element') ? ' <span class="qa-req">*</span>' : ''}</label>
             <ul class="qa-elements-list">${elementsList}</ul>
           </div>` : ''}
 
           ${fieldVisible(formCfg, 'computed') && hasElements ? `
-          <div class="qa-row">
+          <div class="qa-row" data-qa-section="computed">
             <label>Computed (actual)${fieldRequired(formCfg, 'computed') ? ' <span class="qa-req">*</span>' : ''}</label>
             ${renderComputedBlock(issue, elements)}
           </div>` : ''}
 
           ${shouldShowExpectedCss(formCfg, issue) ? `
-          <div class="qa-row">
+          <div class="qa-row" data-qa-section="expected">
             <div class="qa-label-row">
               <label>Expected (Figma / spec)</label>
               <button class="qa-add-row qa-link-btn" type="button">+ Add property</button>
@@ -697,7 +1013,7 @@
           </div>` : ''}
 
           ${shouldShowFigmaField(formCfg, issue) ? `
-          <div class="qa-row">
+          <div class="qa-row" data-qa-section="figma">
             <div class="qa-label-row">
               <label>Figma link (optional)</label>
               ${issue.expected?.figmaAutoMatched
@@ -711,15 +1027,15 @@
           </div>` : ''}
 
           ${fieldVisible(formCfg, 'note') ? `
-          <div class="qa-row">
+          <div class="qa-row" data-qa-section="note">
             <label>Note${fieldRequired(formCfg, 'note') ? ' <span class="qa-req">*</span>' : ''}</label>
             <textarea class="qa-note" rows="3" placeholder="Free-text context (paste images here too)"></textarea>
           </div>` : ''}
 
-          ${renderPanelsBlock(issue, opts)}
+          <div data-qa-section="panels">${renderPanelsBlock(issue, opts)}</div>
 
           ${fieldVisible(formCfg, 'screenshots') ? `
-          <div class="qa-row">
+          <div class="qa-row" data-qa-section="screenshots">
             <div class="qa-label-row">
               <label>Screenshots${fieldRequired(formCfg, 'screenshots') ? ' <span class="qa-req">*</span>' : ''}</label>
               <span class="qa-hint">drag to reorder · click to preview</span>

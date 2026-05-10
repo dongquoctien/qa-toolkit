@@ -21,8 +21,13 @@ const MSG = {
   FIGMA_TREE_GET:     'qa/figma-tree/get',
   FIGMA_TREE_LIST:    'qa/figma-tree/list',
   FIGMA_TREE_IMPORT:  'qa/figma-tree/import',
-  FIGMA_TREE_DELETE:  'qa/figma-tree/delete'
+  FIGMA_TREE_DELETE:  'qa/figma-tree/delete',
+  DRAFT_GET:          'qa/draft/get',
+  DRAFT_SAVE:         'qa/draft/save',
+  DRAFT_CLEAR:        'qa/draft/clear'
 };
+
+const DRAFT_KEY_PREFIX = 'draft:';
 
 const ISSUES_KEY = 'issues';
 const SETTINGS_KEY = 'settings';
@@ -274,6 +279,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case MSG.FIGMA_TREE_DELETE: {
           const profileId = message.payload;
           await chrome.storage.local.remove(FIGMA_TREE_KEY_PREFIX + profileId);
+          return sendResponse({ ok: true });
+        }
+        case MSG.DRAFT_GET: {
+          const issueId = message.payload;
+          if (!issueId) return sendResponse(null);
+          const data = await chrome.storage.local.get(DRAFT_KEY_PREFIX + issueId);
+          return sendResponse(data[DRAFT_KEY_PREFIX + issueId] || null);
+        }
+        case MSG.DRAFT_SAVE: {
+          const { issueId, snapshot } = message.payload || {};
+          if (!issueId) return sendResponse({ error: 'missing issueId' });
+          await chrome.storage.local.set({
+            [DRAFT_KEY_PREFIX + issueId]: { snapshot, savedAt: Date.now() }
+          });
+          return sendResponse({ ok: true });
+        }
+        case MSG.DRAFT_CLEAR: {
+          const issueId = message.payload;
+          if (!issueId) return sendResponse({ ok: true });
+          await chrome.storage.local.remove(DRAFT_KEY_PREFIX + issueId);
           return sendResponse({ ok: true });
         }
         default:
