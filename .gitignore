@@ -31,7 +31,6 @@ tmp/
 
 # QA workspace artifacts (test reports / extracted zips, consumed locally)
 docs/qa/
-extensions/*/docs/qa/
 
 # Local Claude Code state
 .claude/
