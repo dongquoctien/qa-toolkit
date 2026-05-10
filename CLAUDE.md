@@ -10,14 +10,13 @@ Read this when picking up this repo in a future session. It covers architecture,
 
 ## Repo at a glance
 
-Restructured as a monorepo on 2026-05-10 and renamed `qa-annotator-extension` →
-`qa-toolkit` on the same day. GitHub redirects the old URL automatically so
-existing clones / plugin installs keep working. `.claude-plugin/marketplace.json`
-source path stays `./plugins/qa-tooling` (relative — never depended on the
-slug anyway).
+Restructured as a monorepo on 2026-05-10. GitHub slug is still
+`qa-annotator-extension` (will rename to `qa-toolkit` once 2nd extension
+ships); `.claude-plugin/marketplace.json` source path stays `./plugins/qa-tooling`
+so existing plugin installs keep working through GitHub URL redirects.
 
 ```
-qa-toolkit/                                   ← repo
+qa-annotator-extension/                       ← repo (slug not yet renamed)
 ├── extensions/
 │   └── qa-annotator/                         ← MV3 extension — Load unpacked HERE
 │       ├── manifest.json                     ← (moved from repo root)
@@ -316,7 +315,7 @@ After changing tree schema, you need to regenerate `D:\Code\worktree\homepage\ab
 
 ## Memory
 
-User has these memories saved at `~/.claude/projects/D--Github-qa-annotator-extension/memory/` (memory directory key is derived from the local filesystem path, not the GitHub slug — stays under the old name until the user renames their local clone folder):
+User has these memories saved at `~/.claude/projects/D--Github-qa-annotator-extension/memory/`:
 
 - `feedback_ask_user_question.md` — never inline `?` prompts
 - `feedback_gitignore_docs_blanket_rule.md` — rewrite flat `docs/` rule
