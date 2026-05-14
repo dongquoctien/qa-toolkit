@@ -23,11 +23,15 @@
   const CHIP_ID = 'qa-viewport-chip';
 
   let activeWidth = 0;
+  let activeHeight = 0;
+  let chipSuppressed = false;   // true while inspector is active — chip hidden
+                                // but emulation stays on (don't churn debugger)
   let pausedForInspector = false;
   let pausedWidth = 0;
 
   function showChip(width, height) {
     hideChip();
+    if (chipSuppressed) return;   // inspector wants the corner clear
     const el = document.createElement('div');
     el.id = CHIP_ID;
     el.className = 'qa-ext-ui';
@@ -51,15 +55,17 @@
       return;
     }
     activeWidth = res.width;
-    // Show chip with the actual height the SW applied (height map varies by preset).
+    // Height matches what the SW applied (preset map or 16:9 fallback).
     const heightMap = { 360: 640, 414: 896, 768: 1024, 1024: 1366 };
-    showChip(width, heightMap[width] || Math.round(width * 16 / 9));
+    activeHeight = heightMap[width] || Math.round(width * 16 / 9);
+    showChip(activeWidth, activeHeight);
     try { sessionStorage.setItem(STORAGE_KEY, String(width)); } catch {}
   }
 
   async function disable() {
     if (!activeWidth) return;
     activeWidth = 0;
+    activeHeight = 0;
     hideChip();
     try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
     try {
@@ -70,18 +76,19 @@
     } catch {/* SW might be sleeping — ok */}
   }
 
+  // Inspector lifecycle: keep the emulation on (so the page stays at 360px
+  // while picking) but hide the chip so it doesn't cover the page's top-right
+  // menu / search / login buttons. This is the common pain point — the chip
+  // was z-indexed above the host UI and QA couldn't click controls behind it.
   function pauseForInspector() {
-    if (!activeWidth) return;
-    pausedForInspector = true;
-    pausedWidth = activeWidth;
-    disable();
+    // Suppress chip even if emulator is off — keeps the contract simple.
+    chipSuppressed = true;
+    hideChip();
   }
 
   function resumeAfterInspector() {
-    if (!pausedForInspector) return;
-    pausedForInspector = false;
-    enable(pausedWidth);
-    pausedWidth = 0;
+    chipSuppressed = false;
+    if (activeWidth) showChip(activeWidth, activeHeight);
   }
 
   function restoreFromSession() {
