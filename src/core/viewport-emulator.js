@@ -1,103 +1,158 @@
-// QA.viewportEmulator — viewport emulation via chrome.debugger
-// (Emulation.setDeviceMetricsOverride) so CSS media queries trigger correctly
-// AND window.innerWidth/devicePixelRatio match the emulated viewport.
+// QA.viewportEmulator — squeeze host-page content into a fixed-width column so
+// QA can test mobile/tablet layouts without resizing the browser window. The
+// modal + popup stay at full size on the right side of the screen.
 //
-// The heavy lifting happens in the service worker (which owns the debugger
-// session). This content-script module only:
-//   1. Renders the indicator chip "📱 360×640" pinned top-right of the real
-//      viewport. The host page itself is fully resized by the debugger, so
-//      no DOM wrap is needed.
-//   2. Pauses emulation during inspector to keep click coords aligned with the
-//      *real* mouse position. The chrome.debugger override remaps the device
-//      pixel ratio + mobile flag — without pausing, hover highlight lags.
-//   3. Persists chosen width in per-tab sessionStorage so reload re-applies.
+// Mechanism: move all non-QA body children into a wrapper div with fixed width,
+// turn body into a 2-column flex layout. Media queries trigger because the
+// wrap's width drives CSS layout (not window.innerWidth). JS-based responsive
+// (which reads window.innerWidth) still sees the real viewport — accepted
+// trade-off vs. requiring chrome.debugger permission.
 //
-// Caveats:
-//   - The debugger banner ("QA Annotator is debugging this browser") will be
-//     visible while emulation is on. We accept it because CSS media queries
-//     need real emulation; DOM-wrap (v0.6.0) couldn't trigger them.
-//   - On detach (banner X clicked), the page snaps back to native. Content
-//     script gets MSG.VIEWPORT_STATE = inactive on next popup open.
+// State: per-tab sessionStorage key `qa-viewport-w` keeps the choice across
+// reloads. Auto-restore on content script load.
+//
+// Inspector lifecycle: while inspector is active, emulator auto-disables so
+// element bounding rects line up with real viewport coordinates. Re-enables on
+// inspector stop.
 (function () {
   const STORAGE_KEY = 'qa-viewport-w';
+  const WRAP_ID = 'qa-viewport-wrap';
   const CHIP_ID = 'qa-viewport-chip';
 
+  let active = false;
   let activeWidth = 0;
-  let activeHeight = 0;
-  let chipSuppressed = false;   // true while inspector is active — chip hidden
-                                // but emulation stays on (don't churn debugger)
+  let savedBodyStyle = '';
+  let savedHtmlStyle = '';
   let pausedForInspector = false;
   let pausedWidth = 0;
 
-  function showChip(width, height) {
-    hideChip();
-    if (chipSuppressed) return;   // inspector wants the corner clear
+  function chip(width) {
     const el = document.createElement('div');
     el.id = CHIP_ID;
     el.className = 'qa-ext-ui';
-    el.textContent = `📱 ${width}×${height}`;
-    document.body.appendChild(el);
+    el.textContent = `📱 ${width}×${window.innerHeight}`;
+    return el;
   }
 
-  function hideChip() {
-    document.getElementById(CHIP_ID)?.remove();
+  function isQaNode(n) {
+    if (n.nodeType !== 1) return false;
+    if (n.classList && n.classList.contains('qa-ext-ui')) return true;
+    if (n.id && n.id.startsWith('qa-')) return true;
+    return false;
   }
 
-  async function enable(width) {
-    if (!width || width < 200 || width > 2400) return;
-    // Service worker handles the actual emulation.
-    const res = await chrome.runtime.sendMessage({
-      type: 'qa/viewport/set',
-      payload: { width }
-    });
-    if (!res?.ok) {
-      console.warn('[QA] viewport emulation failed:', res?.error);
-      return;
+  function enable(width) {
+    if (active) {
+      if (activeWidth === width) return;
+      disable();
     }
-    activeWidth = res.width;
-    // Height matches what the SW applied (preset map or 16:9 fallback).
-    const heightMap = { 360: 640, 414: 896, 768: 1024, 1024: 1366 };
-    activeHeight = heightMap[width] || Math.round(width * 16 / 9);
-    showChip(activeWidth, activeHeight);
+    if (!width || width < 200 || width > 2400) return;
+
+    active = true;
+    activeWidth = width;
+    savedBodyStyle = document.body.getAttribute('style') || '';
+    savedHtmlStyle = document.documentElement.getAttribute('style') || '';
+
+    const wrap = document.createElement('div');
+    wrap.id = WRAP_ID;
+
+    // Move non-QA children into wrap
+    const children = Array.from(document.body.childNodes);
+    children.forEach((n) => {
+      if (isQaNode(n)) return;
+      wrap.appendChild(n);
+    });
+
+    document.body.appendChild(wrap);
+    document.body.appendChild(chip(width));
+
+    // Force 2-column layout via inline style — survives host CSS overrides
+    document.body.style.cssText = `
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex !important;
+      align-items: stretch !important;
+      overflow: hidden !important;
+      height: 100vh !important;
+      background: #1f2937 !important;
+    `;
+    document.documentElement.style.cssText = `
+      overflow: hidden !important;
+    `;
+
+    // sessionStorage for per-tab persistence
     try { sessionStorage.setItem(STORAGE_KEY, String(width)); } catch {}
+
+    broadcastState();
   }
 
-  async function disable() {
-    if (!activeWidth) return;
+  function disable() {
+    if (!active) return;
+    active = false;
     activeWidth = 0;
-    activeHeight = 0;
-    hideChip();
+
+    const wrap = document.getElementById(WRAP_ID);
+    if (wrap) {
+      // Move children back to body
+      while (wrap.firstChild) {
+        document.body.insertBefore(wrap.firstChild, wrap);
+      }
+      wrap.remove();
+    }
+    document.getElementById(CHIP_ID)?.remove();
+
+    // Restore inline styles
+    if (savedBodyStyle) document.body.setAttribute('style', savedBodyStyle);
+    else document.body.removeAttribute('style');
+    if (savedHtmlStyle) document.documentElement.setAttribute('style', savedHtmlStyle);
+    else document.documentElement.removeAttribute('style');
+
     try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
-    try {
-      await chrome.runtime.sendMessage({
-        type: 'qa/viewport/set',
-        payload: { width: 0 }
-      });
-    } catch {/* SW might be sleeping — ok */}
+
+    broadcastState();
   }
 
-  // Inspector lifecycle: keep the emulation on (so the page stays at 360px
-  // while picking) but hide the chip so it doesn't cover the page's top-right
-  // menu / search / login buttons. This is the common pain point — the chip
-  // was z-indexed above the host UI and QA couldn't click controls behind it.
+  function toggle(width) {
+    if (active && (!width || width === activeWidth)) disable();
+    else enable(width);
+  }
+
+  // Inspector lifecycle hooks — called by content.js
   function pauseForInspector() {
-    // Suppress chip even if emulator is off — keeps the contract simple.
-    chipSuppressed = true;
-    hideChip();
+    if (!active) return;
+    pausedForInspector = true;
+    pausedWidth = activeWidth;
+    disable();
   }
 
   function resumeAfterInspector() {
-    chipSuppressed = false;
-    if (activeWidth) showChip(activeWidth, activeHeight);
+    if (!pausedForInspector) return;
+    pausedForInspector = false;
+    enable(pausedWidth);
+    pausedWidth = 0;
   }
 
+  function broadcastState() {
+    try {
+      window.postMessage({
+        src: 'qa-ext',
+        type: 'viewport-state',
+        active,
+        width: activeWidth
+      }, '*');
+    } catch {}
+  }
+
+  // Restore from sessionStorage on load (after content scripts settle)
   function restoreFromSession() {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const w = parseInt(raw, 10);
-      if (w >= 200 && w <= 2400) {
-        requestAnimationFrame(() => enable(w));
+      if (raw) {
+        const w = parseInt(raw, 10);
+        if (w >= 200 && w <= 2400) {
+          // Defer one frame so host page DOM is stable
+          requestAnimationFrame(() => enable(w));
+        }
       }
     } catch {}
   }
@@ -106,9 +161,10 @@
   self.QA.viewportEmulator = {
     enable,
     disable,
+    toggle,
     pauseForInspector,
     resumeAfterInspector,
-    isActive: () => !!activeWidth,
+    isActive: () => active,
     getWidth: () => activeWidth,
     restoreFromSession
   };
