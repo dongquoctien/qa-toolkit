@@ -1709,23 +1709,11 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
 }
 
 /* ============================================================
-   Viewport emulator — squeeze host content into a fixed-width
-   column on the left so QA can test mobile/tablet layouts while
-   keeping the modal + popup at full size.
+   Viewport emulator — chrome.debugger-driven device metrics
+   override (v0.6.1+). The page itself is fully resized by the
+   debugger, no DOM wrap needed. We only render the indicator
+   chip pinned to the (emulated) viewport's top-right corner.
    ============================================================ */
-#qa-viewport-wrap {
-  /* width set inline by JS — varies per preset (360/414/768/1024/custom) */
-  width: 360px;
-  height: 100vh !important;
-  overflow: auto !important;
-  background: #fff !important;
-  border-right: 2px dashed var(--qa-accent, #ec4899) !important;
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.18) !important;
-  flex-shrink: 0 !important;
-  position: relative !important;
-  isolation: isolate !important;
-}
-/* Indicator chip — pink pill at top-right of real viewport, outside wrap. */
 #qa-viewport-chip {
   position: fixed !important;
   top: 12px !important;
