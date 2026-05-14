@@ -95,6 +95,46 @@ button.icon-btn:hover {
 }
 button.icon-btn svg { display: block; }
 
+.row-viewport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px solid #f3f4f6;
+}
+.row-viewport label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.row-viewport select {
+  flex: 1;
+  font-size: 12px;
+  padding: 5px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+.row-viewport select:focus {
+  outline: 2px solid var(--qa-accent);
+  outline-offset: 1px;
+}
+.row-viewport input[type=number] {
+  width: 72px;
+  font-size: 12px;
+  padding: 5px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+}
+.row-viewport input[type=number]:focus {
+  outline: 2px solid var(--qa-accent);
+  outline-offset: 1px;
+}
+
 .row-stats {
   justify-content: space-between;
   background: #f9fafb;

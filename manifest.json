@@ -68,6 +68,7 @@
         "src/adapters/adapter-registry.js",
         "src/core/issue-builder.js",
         "src/core/inspector.js",
+        "src/core/viewport-emulator.js",
         "src/core/region-selector.js",
         "src/core/annotation-editor.js",
         "src/core/form-config.js",

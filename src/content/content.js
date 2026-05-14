@@ -34,6 +34,9 @@
       await QA.runtimeBridge.whenReady();
       QA.runtimeBridge.configure(liveSettings);
     }
+
+    // Restore viewport emulator from per-tab sessionStorage (survives reloads).
+    QA.viewportEmulator?.restoreFromSession();
   }
 
   async function loadFigmaTreeFor(profile) {
@@ -451,6 +454,9 @@
     }
     QA.overlay.show();
 
+    // Pause viewport emulator so bounding rects align with real coords.
+    QA.viewportEmulator?.pauseForInspector();
+
     const onPick = async (elements) => {
       // Pause inspector + hide ALL overlays so capture sees only the page.
       QA.inspector.stop();
@@ -476,6 +482,7 @@
     QA.inspector.stop();
     QA.overlay.hide();
     QA.overlay.setPickedCount(0);
+    QA.viewportEmulator?.resumeAfterInspector();
   }
 
   async function openIssueForElements(elements) {
@@ -618,6 +625,24 @@
             // Reply early so the popup can close, then run the flow.
             sendResponse({ ok: true });
             startBlankManualCapture().catch((e) => console.warn('[QA] manual capture failed', e));
+            return;
+          }
+          case MSG.VIEWPORT_SET: {
+            // payload: { width: number | null }   null/0 = disable
+            const w = message.payload?.width;
+            if (!w) QA.viewportEmulator?.disable();
+            else QA.viewportEmulator?.enable(w);
+            sendResponse({
+              active: !!QA.viewportEmulator?.isActive(),
+              width: QA.viewportEmulator?.getWidth() || 0
+            });
+            return;
+          }
+          case MSG.VIEWPORT_STATE: {
+            sendResponse({
+              active: !!QA.viewportEmulator?.isActive(),
+              width: QA.viewportEmulator?.getWidth() || 0
+            });
             return;
           }
           case MSG.INSPECTOR_STATE: {

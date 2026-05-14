@@ -27,6 +27,19 @@
     </button>
   </section>
 
+  <section class="row row-viewport">
+    <label for="viewport">Viewport</label>
+    <select id="viewport" title="Squeeze the page into a fixed-width column to test mobile/tablet layouts. Modal stays at full size on the right.">
+      <option value="0">Native (off)</option>
+      <option value="360">360px — iPhone SE</option>
+      <option value="414">414px — iPhone 12 Pro</option>
+      <option value="768">768px — iPad mini</option>
+      <option value="1024">1024px — iPad Pro</option>
+      <option value="custom">Custom…</option>
+    </select>
+    <input id="viewport-custom" type="number" min="200" max="2400" step="1" placeholder="px" hidden />
+  </section>
+
   <section class="row row-stats">
     <span class="count">
       Issues: <strong id="count">0</strong>

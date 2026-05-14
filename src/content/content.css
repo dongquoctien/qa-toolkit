@@ -1707,3 +1707,37 @@ html.qa-inspect-on, html.qa-inspect-on body { cursor: crosshair !important; }
   outline: 2px solid var(--qa-accent) !important;
   outline-offset: -1px !important;
 }
+
+/* ============================================================
+   Viewport emulator — squeeze host content into a fixed-width
+   column on the left so QA can test mobile/tablet layouts while
+   keeping the modal + popup at full size.
+   ============================================================ */
+#qa-viewport-wrap {
+  /* width set inline by JS — varies per preset (360/414/768/1024/custom) */
+  width: 360px;
+  height: 100vh !important;
+  overflow: auto !important;
+  background: #fff !important;
+  border-right: 2px dashed var(--qa-accent, #ec4899) !important;
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.18) !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  isolation: isolate !important;
+}
+/* Indicator chip — pink pill at top-right of real viewport, outside wrap. */
+#qa-viewport-chip {
+  position: fixed !important;
+  top: 12px !important;
+  right: 12px !important;
+  background: var(--qa-accent, #ec4899) !important;
+  color: #fff !important;
+  padding: 6px 14px !important;
+  border-radius: 999px !important;
+  font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif !important;
+  letter-spacing: 0.02em !important;
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.35) !important;
+  z-index: 2147483646 !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
