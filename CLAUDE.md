@@ -228,15 +228,23 @@ Panels can either mutate the source object (e.g. pin-notes writes `layer.note` i
 
 `exporter.js#renderPanelsMarkdown` iterates panels in a fixed order: runtime → design → app-state → a11y → i18n → pin-notes. Pin-notes always last because it references screenshots that come after the panels block. Panels with no data return `[]` so the export stays compact when only common fields are filled. The early-skip condition `!panels[id] && id !== 'runtime-context' && id !== 'a11y-findings' && id !== 'pin-notes'` allows those three panels to render even with empty `issue.panels[id]` — they read from `issue.runtimeContext`, `issue.a11yFindings`, and `issue.screenshots` respectively (auto-populated at pick time, not user-edited).
 
-### 24. Viewport emulator wraps body content, NOT iframe
+### 24. Viewport emulator uses chrome.debugger (NOT DOM wrap)
 
-`src/core/viewport-emulator.js` (Sprint 5, v0.6.0) squeezes host content into a fixed-width column on the left so QA can log mobile-layout bugs without resizing the browser. **Mechanism**: move all non-QA `body` children into `<div id="qa-viewport-wrap" style="width: {N}px">`, flip `body` to `display: flex` 2-col, indicator chip pinned top-right.
+`src/core/viewport-emulator.js` + service-worker.js (v0.6.1+) emulate viewport via `chrome.debugger.Emulation.setDeviceMetricsOverride` — same API DevTools Device Mode uses. **Trade-off accepted**: Chrome shows a debugger banner ("QA Annotator is debugging this browser") while active. v0.6.0's DOM-wrap approach was dropped because CSS `@media` queries don't trigger from container width — they need actual viewport spoof.
+
+**Architecture**:
+- Service worker holds `viewportState: Map<tabId, {width, height, mobile, dpr}>` + `chrome.debugger.attach/sendCommand`.
+- Content script `QA.viewportEmulator` is a thin wrapper — sends `MSG.VIEWPORT_SET` and renders the in-page chip. No DOM manipulation of host page.
+- Height auto-derived from width (360→640, 414→896, 768→1024, 1024→1366). Custom widths use 16:9.
+- `mobile: true` when width < 768 → also enables touch emulation so `:hover` doesn't stick.
 
 **Key constraints**:
-- **Inspector pause** — `enable/disable` lifecycle hooked into `startInspector()` / `stopInspector()` via `pauseForInspector()` / `resumeAfterInspector()`. Without this, `getBoundingClientRect()` returns coords relative to viewport, but the page is offset inside the wrap → highlight + tooltip land in wrong place. Don't remove this pause.
-- **Per-tab sessionStorage** — `qa-viewport-w` key. `restoreFromSession()` called from `init()` after content script loads. Surviving reloads is intentional UX.
-- **`window.innerWidth` NOT spoofed** — emulator uses CSS layout only (no `chrome.debugger` API to avoid scary banner). JS-based responsive code reading `window.innerWidth` still sees the real viewport. Documented trade-off vs DevTools Device Mode.
-- **`isQaNode()` guard** — when moving children into wrap, skip nodes with `qa-ext-ui` class or `qa-*` id so modal/tooltip/overlay stay at full viewport scope. Otherwise modal gets squeezed too.
+- **`debugger` permission required** in manifest → user MUST accept on install. Web Store may flag (test before publishing).
+- **Per-tab attachment** — service worker attaches on first `VIEWPORT_SET`, detaches on `width=0` or tab close (`chrome.tabs.onRemoved`).
+- **User can dismiss banner** — Chrome's banner has an X. `chrome.debugger.onDetach` listener clears `viewportState` so popup shows correct status.
+- **Inspector pause** still important — `pauseForInspector()` / `resumeAfterInspector()` toggle emulation off during pick (mobile UA + DPR change can affect click coord math). Lifecycle hooked into `startInspector` / `stopInspector` in content.js.
+- **Per-tab sessionStorage** — `qa-viewport-w` key. `restoreFromSession()` called from `init()` after content script loads. Survives reloads, resets on tab close.
+- **No DOM wrap CSS** — only `#qa-viewport-chip` rules in content.css. The `#qa-viewport-wrap` rules were removed in v0.6.1.
 - **Manifest order** — `viewport-emulator.js` listed AFTER `inspector.js` so the pause hooks reference the loaded `QA.inspector` module.
 
 ### 23. Bullet `- **bold:** value` strips closing `**` (qa-sync-jira)

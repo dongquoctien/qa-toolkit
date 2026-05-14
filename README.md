@@ -111,14 +111,16 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ---
 
-## What's new in v0.6.0 (2026-05-09)
+## What's new in v0.6.1 (2026-05-09)
 
-- **Viewport emulator** — test mobile/tablet layouts without resizing the browser window:
+- **Viewport emulator** (Sprint 5) — test mobile/tablet layouts without resizing the browser window:
   - Pick a viewport from popup dropdown — `360px` (iPhone SE), `414px` (iPhone 12 Pro), `768px` (iPad mini), `1024px` (iPad Pro), or custom width.
-  - Host page squeezes into a fixed-width column on the left with dashed accent border + pink "📱 360×H" indicator chip.
+  - **Real device-metrics override** via `chrome.debugger.Emulation.setDeviceMetricsOverride` — same API DevTools Device Mode uses. CSS media queries trigger correctly, `window.innerWidth` matches the emulated width, mobile UA + touch emulation auto-enabled when width < 768.
   - **Modal + popup stay at full size** — log mobile bugs without the form shrinking too.
-  - Survives page reloads (per-tab sessionStorage). Auto-pauses while Inspector is active to keep click coordinates accurate.
-  - DOM-wrap approach (no `chrome.debugger` permission needed) — safe for Chrome Web Store distribution. Trade-off: `window.innerWidth` still reports the real viewport, so JS-based responsive code won't detect the emulated width (CSS media queries do).
+  - Pink "📱 360×640" indicator chip pinned top-right of the emulated viewport.
+  - Survives page reloads (per-tab sessionStorage). Auto-pauses while Inspector is active.
+  - Requires `debugger` permission — Chrome shows a banner ("QA Annotator is debugging this browser") while emulation is on. Same trade-off React DevTools / Vue DevTools accept.
+  - v0.6.0 first shipped DOM-wrap approach but CSS media queries didn't trigger — verified live on ohmyhotelnco.com. v0.6.1 switches to chrome.debugger.
 
 ## What's new in v0.5.1 (2026-05-09)
 
