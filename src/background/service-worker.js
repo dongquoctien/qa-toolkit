@@ -3,8 +3,6 @@ import * as profile from '../profile/profile-manager.js';
 
 const MSG = {
   INSPECTOR_TOGGLE:   'qa/inspector/toggle',
-  VIEWPORT_SET:       'qa/viewport/set',
-  VIEWPORT_STATE:     'qa/viewport/state',
   PROFILE_LIST:       'qa/profile/list',
   PROFILE_SET_ACTIVE: 'qa/profile/set-active',
   PROFILE_GET_ACTIVE: 'qa/profile/get-active',
@@ -166,85 +164,10 @@ chrome.runtime.onStartup.addListener(async () => {
   await profile.ensureSeeded();
 });
 
-// ============ Viewport emulator (chrome.debugger device metrics override) ============
-// Per-tab state map — { tabId: { width, height, deviceScaleFactor, mobile } }.
-// Service worker keeps this in memory (lost on SW restart, re-applied on next set).
-const viewportState = new Map();
-
-async function ensureAttached(tabId) {
-  try {
-    await chrome.debugger.attach({ tabId }, '1.3');
-  } catch (e) {
-    // 'Another debugger is already attached' is fine (devtools open) — we still
-    // get to send commands. Throw on other errors.
-    const msg = String(e?.message || e);
-    if (!/already attached/i.test(msg)) throw e;
-  }
-}
-
-async function setDeviceMetrics(tabId, width) {
-  if (!width) {
-    // Disable emulation + detach
-    try { await chrome.debugger.sendCommand({ tabId }, 'Emulation.clearDeviceMetricsOverride'); } catch {}
-    try { await chrome.debugger.detach({ tabId }); } catch {}
-    viewportState.delete(tabId);
-    return;
-  }
-  await ensureAttached(tabId);
-  // Common mobile preset heights — height auto-derived from width to look natural.
-  // 360→640 (iPhone SE), 414→896 (iPhone XR), 768→1024 (iPad), 1024→1366 (iPad Pro).
-  const heightMap = { 360: 640, 414: 896, 768: 1024, 1024: 1366 };
-  const height = heightMap[width] || Math.round(width * 16 / 9);
-  const mobile = width < 768;
-  const deviceScaleFactor = mobile ? 2 : 1;
-  await chrome.debugger.sendCommand({ tabId }, 'Emulation.setDeviceMetricsOverride', {
-    width, height, deviceScaleFactor, mobile
-  });
-  // Also set touch emulation when mobile so :hover doesn't stick.
-  try {
-    await chrome.debugger.sendCommand({ tabId }, 'Emulation.setTouchEmulationEnabled', {
-      enabled: mobile, maxTouchPoints: mobile ? 5 : 1
-    });
-  } catch {/* older Chrome may reject — non-fatal */}
-  viewportState.set(tabId, { width, height, deviceScaleFactor, mobile });
-}
-
-// Detach on tab close so we don't leak debugger sessions.
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (viewportState.has(tabId)) {
-    chrome.debugger.detach({ tabId }).catch(() => {});
-    viewportState.delete(tabId);
-  }
-});
-
-// User-initiated detach (clicking "X" on the debugger banner) — clean up state
-// so popup shows correct status next time.
-chrome.debugger.onDetach.addListener((source) => {
-  if (source.tabId) viewportState.delete(source.tabId);
-});
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     try {
       switch (message?.type) {
-        case MSG.VIEWPORT_SET: {
-          // payload: { width: number | 0 }   tabId derived from sender or active tab
-          const tab = sender.tab || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-          if (!tab?.id) return sendResponse({ ok: false, error: 'no-tab' });
-          try {
-            await setDeviceMetrics(tab.id, message.payload?.width || 0);
-            const state = viewportState.get(tab.id);
-            return sendResponse({ ok: true, active: !!state, width: state?.width || 0 });
-          } catch (e) {
-            return sendResponse({ ok: false, error: String(e?.message || e) });
-          }
-        }
-        case MSG.VIEWPORT_STATE: {
-          const tab = sender.tab || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-          if (!tab?.id) return sendResponse({ active: false, width: 0 });
-          const state = viewportState.get(tab.id);
-          return sendResponse({ active: !!state, width: state?.width || 0 });
-        }
         case MSG.PROFILE_LIST:       return sendResponse(await profile.list());
         case MSG.PROFILE_GET_ACTIVE: return sendResponse(await profile.getActive());
         case MSG.PROFILE_SET_ACTIVE: {
