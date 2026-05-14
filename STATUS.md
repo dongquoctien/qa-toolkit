@@ -1,7 +1,40 @@
 # Status — QA Annotator
 
-> Last updated: 2026-05-08
+> Last updated: 2026-05-09
 > Owner: itdongquoctien
+
+---
+
+## ✅ Sprint 5 — v0.6.0 (shipped 2026-05-09)
+
+> User asked: when browser viewport shrinks to 360px to test mobile bug, the QA modal + annotation editor also shrink — hard to log bugs. Suggested: emulate viewport via DOM hack instead of resizing window, so popup stays full size.
+
+### Sprint 5 result — viewport emulator
+
+| # | Task | Files |
+|---|---|---|
+| 5.1 | **viewport-emulator.js core** — wrap all non-QA `body` children into `<div id="qa-viewport-wrap">` with fixed width, body → 2-col flex layout. Indicator chip pinned top-right. Reversible 100% via stored original styles. | `src/core/viewport-emulator.js` (~150 LOC) |
+| 5.2 | **MSG.VIEWPORT_SET + content.js handler** — popup sends `{ width }`, content forwards to `QA.viewportEmulator.enable/disable`. Inspector lifecycle hooks: `pauseForInspector()` on start, `resumeAfterInspector()` on stop. | `src/lib/messages.js`, `src/content/content.js` |
+| 5.3 | **Popup UI — viewport dropdown** — 5 presets (Native / 360 / 414 / 768 / 1024) + Custom number input. Restores current state from content script on popup open. | `src/popup/popup.html`, `popup.js`, `popup.css` |
+| 5.4 | **CSS — wrap layout + indicator chip** — `#qa-viewport-wrap` with dashed accent border + shadow, `#qa-viewport-chip` pink pill top-right with width × height label. | `src/content/content.css` (+40 LOC) |
+| 5.5 | **Manifest + CLAUDE.md gotcha #24** — register viewport-emulator.js AFTER inspector.js (depends on it for pause hooks). Bump 0.5.1 → 0.6.0. | manifest, docs |
+
+### Why DOM-wrap, not chrome.debugger?
+
+| Approach | Pros | Cons |
+|---|---|---|
+| **DOM wrap (this Sprint 5)** | No special permission, no scary browser banner, modal stays full size, reversible | `window.innerWidth` still real → JS-based responsive misses |
+| `chrome.debugger.Emulation.setDeviceMetricsOverride` | Spoofs `window.innerWidth`, full DevTools Device Mode fidelity | Requires `debugger` permission → Chrome shows red "extension is debugging" banner; Web Store may flag |
+| CSS `transform: scale` | Pure CSS | Breaks click coords, blurry text, doesn't trigger media queries |
+
+DOM-wrap chosen as the right trade-off for Chrome Web Store distribution.
+
+### Defaults + UX details
+
+- **Presets**: 360 (iPhone SE), 414 (iPhone 12 Pro), 768 (iPad mini), 1024 (iPad Pro), Native (off), Custom (200–2400px)
+- **Persist**: per-tab `sessionStorage["qa-viewport-w"]` — survives reload, resets on tab close
+- **Inspector**: auto-pauses emulator while picking, restores after stop (avoids coordinate-system mismatch)
+- **Indicator chip**: pink pill `📱 360×H` pinned top-right of real viewport, outside wrap, pointer-events:none
 
 ---
 

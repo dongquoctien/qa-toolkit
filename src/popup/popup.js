@@ -140,6 +140,58 @@
     window.close();
   });
 
+  // Viewport emulator — squeeze host content into a fixed-width column for
+  // mobile/tablet layout testing. Popup stays open so user can toggle widths.
+  const viewportSelect = $('viewport');
+  const viewportCustom = $('viewport-custom');
+  if (viewportSelect) {
+    // Restore current state from content script
+    (async () => {
+      try {
+        const tab = await activeTab();
+        const state = await chrome.tabs.sendMessage(tab.id, { type: MSG.VIEWPORT_STATE });
+        if (state?.active && state.width) {
+          const presetValues = ['360', '414', '768', '1024'];
+          if (presetValues.includes(String(state.width))) {
+            viewportSelect.value = String(state.width);
+          } else {
+            viewportSelect.value = 'custom';
+            viewportCustom.value = state.width;
+            viewportCustom.hidden = false;
+          }
+        }
+      } catch {/* no content script — leave default */}
+    })();
+
+    async function applyViewport(width) {
+      const tab = await activeTab();
+      try {
+        await chrome.tabs.sendMessage(tab.id, {
+          type: MSG.VIEWPORT_SET,
+          payload: { width: width || 0 }
+        });
+      } catch {
+        alert('Content script not loaded on this page (chrome://, web store, or PDF viewer).');
+      }
+    }
+
+    viewportSelect.addEventListener('change', async (e) => {
+      const val = e.target.value;
+      if (val === 'custom') {
+        viewportCustom.hidden = false;
+        viewportCustom.focus();
+        return;
+      }
+      viewportCustom.hidden = true;
+      await applyViewport(parseInt(val, 10) || 0);
+    });
+
+    viewportCustom.addEventListener('change', async (e) => {
+      const w = parseInt(e.target.value, 10);
+      if (w >= 200 && w <= 2400) await applyViewport(w);
+    });
+  }
+
   $('export-json').addEventListener('click', async () => {
     await doExport('json');
   });

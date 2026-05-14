@@ -111,6 +111,21 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ---
 
+## What's new in v0.6.0 (2026-05-09)
+
+- **Viewport emulator** — test mobile/tablet layouts without resizing the browser window:
+  - Pick a viewport from popup dropdown — `360px` (iPhone SE), `414px` (iPhone 12 Pro), `768px` (iPad mini), `1024px` (iPad Pro), or custom width.
+  - Host page squeezes into a fixed-width column on the left with dashed accent border + pink "📱 360×H" indicator chip.
+  - **Modal + popup stay at full size** — log mobile bugs without the form shrinking too.
+  - Survives page reloads (per-tab sessionStorage). Auto-pauses while Inspector is active to keep click coordinates accurate.
+  - DOM-wrap approach (no `chrome.debugger` permission needed) — safe for Chrome Web Store distribution. Trade-off: `window.innerWidth` still reports the real viewport, so JS-based responsive code won't detect the emulated width (CSS media queries do).
+
+## What's new in v0.5.1 (2026-05-09)
+
+- Bugfixes from manual region capture flow: Cancel/Capture buttons no longer bake into the screenshot, pin-notes panel refreshes when a new region is added mid-issue, gallery thumbnails bumped to 140px → 3 readable columns.
+- Plugin `qa-sync-jira` bumped to **v0.3.0** — Markdown adapter quirks documented (anti-patterns #13–15: bullet `**X:**` strips closing `**`, inline-backtick HTML gets HTML-stripped, prose with `+ [X] _word_` triggers escapes). Added `escapeProseQuirks()` helper.
+- Plugin `/qa:sync` is now live-tested — see ELS-1379 regression fixture (6-case test matrix + A/B verification rounds).
+
 ## What's new in v0.5.0 (2026-05-09)
 
 - **Manual region capture** — drag a custom rectangle on the page instead of auto-cropping around a picked element. Two entry points:
@@ -153,7 +168,15 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ## Status
 
-- **Extension** v0.3.0 — Phase 1 + Sprint 1 + Sprint 2 (mode-aware modal panels, all 5 mode-specific panels + universal pin-notes, exporter rendering panels) complete and tested live via chrome-devtools MCP.
-- **Plugin** Phase 1 complete; `/qa:init`, `/qa:doctor`, `/qa:figma-sync` exercised live against about-us; `/qa:sync` spec done but not yet exercised against a real Jira workspace.
+- **Extension** v0.6.0 — Phase 1 + Sprint 1–5 complete and live-tested via chrome-devtools MCP.
+  - Sprint 1: settings expansion, annotation editor, runtime buffer, axe a11y, 6 QA modes, issue defaults
+  - Sprint 2: mode-aware modal panels (6 panels via dynamic registry)
+  - Sprint 3: per-mode form builder + 3-state pill (Hidden/Optional/Required)
+  - Sprint 4: manual region capture (popup Quick capture + modal New screenshot)
+  - Sprint 5: viewport emulator (test mobile/tablet layouts without resizing browser)
+- **Plugin** v0.3.0 — Phase 1 commands all shipped; `/qa:sync` live-tested on Jira ELS-1379 with 6-case regression matrix. Skill `qa-sync-jira` v0.3.0 has 15 documented anti-patterns + capability detection for backward-compat with v0.1.4 reports.
 
-Phase 2 (mode-aware modal panels for runtime context / app-state / a11y findings / i18n findings) listed in [`STATUS.md`](STATUS.md#-not-built-phase-2).
+Next on the roadmap (see [`STATUS.md`](STATUS.md#-not-built-phase-2)):
+- Sprint 5 — UX polish (Save button primary, severity colors, empty states, modal split-row fix, annotation active state) ~6h
+- Sprint 6 — `/qa:fix` AI auto-patch source (biggest USP, spec locked: no PR, AskUserQuestion per L2, profile.scripts verify)
+- Sprint 7+ — `/qa:report` Slack/HTML, Profile editor in Settings, Side Panel API, Chrome Web Store publish

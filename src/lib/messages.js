@@ -7,6 +7,8 @@
     INSPECTOR_TOGGLE:   'qa/inspector/toggle',
     INSPECTOR_STATE:    'qa/inspector/state',
     MANUAL_CAPTURE_START: 'qa/manual-capture/start',
+    VIEWPORT_SET:       'qa/viewport/set',
+    VIEWPORT_STATE:     'qa/viewport/state',
 
     // popup ↔ background
     PROFILE_LIST:       'qa/profile/list',
