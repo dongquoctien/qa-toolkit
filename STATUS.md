@@ -5,12 +5,6 @@
 
 ---
 
-## ✅ Sprint 5 patch — v0.6.2 (shipped 2026-05-15)
-
-> User reported: the `📱 360×640` chip pinned top-right of the emulated viewport covers the host site's menu/search/login. QA needed Inspector to click on elements behind the chip but couldn't.
->
-> Fix: chip now auto-hides while Inspector is active (`pauseForInspector()` only hides chip, doesn't disable emulation). When Inspector stops (Esc), chip returns. The emulated viewport stays at 360×640 throughout — Inspector picks against the actual mobile layout that's visible.
-
 ## ✅ Sprint 5 — v0.6.1 (shipped 2026-05-09)
 
 > User asked: when browser viewport shrinks to 360px to test mobile bug, the QA modal + annotation editor also shrink — hard to log bugs. Suggested: emulate viewport via plugin instead of resizing window, so popup stays full size.

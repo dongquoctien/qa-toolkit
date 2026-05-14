@@ -111,10 +111,6 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ---
 
-## What's new in v0.6.2 (2026-05-15)
-
-- **Viewport chip auto-hide during Inspector** — the `📱 360×640` indicator chip was pinned top-right of the emulated viewport, covering the host site's menu / search / login icons that usually live there. QA couldn't Inspector those elements. Fix: chip now auto-hides the moment Start Inspector is pressed and reappears on stop. Emulation itself stays on so picks still land on the mobile layout.
-
 ## What's new in v0.6.1 (2026-05-09)
 
 - **Viewport emulator** (Sprint 5) — test mobile/tablet layouts without resizing the browser window:
@@ -174,7 +170,7 @@ Edit / delete saved issues without re-picking. Re-import a previously exported Z
 
 ## Status
 
-- **Extension** v0.6.2 — Phase 1 + Sprint 1–5 complete and live-tested via chrome-devtools MCP.
+- **Extension** v0.6.0 — Phase 1 + Sprint 1–5 complete and live-tested via chrome-devtools MCP.
   - Sprint 1: settings expansion, annotation editor, runtime buffer, axe a11y, 6 QA modes, issue defaults
   - Sprint 2: mode-aware modal panels (6 panels via dynamic registry)
   - Sprint 3: per-mode form builder + 3-state pill (Hidden/Optional/Required)
