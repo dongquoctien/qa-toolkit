@@ -242,7 +242,7 @@ Panels can either mutate the source object (e.g. pin-notes writes `layer.note` i
 - **`debugger` permission required** in manifest → user MUST accept on install. Web Store may flag (test before publishing).
 - **Per-tab attachment** — service worker attaches on first `VIEWPORT_SET`, detaches on `width=0` or tab close (`chrome.tabs.onRemoved`).
 - **User can dismiss banner** — Chrome's banner has an X. `chrome.debugger.onDetach` listener clears `viewportState` so popup shows correct status.
-- **Inspector pause** still important — `pauseForInspector()` / `resumeAfterInspector()` toggle emulation off during pick (mobile UA + DPR change can affect click coord math). Lifecycle hooked into `startInspector` / `stopInspector` in content.js.
+- **Inspector pause = chip hide only (v0.6.2)** — `pauseForInspector()` does NOT turn emulation off; it only hides the `#qa-viewport-chip` so the host page's top-right menu/search/login aren't covered. Emulation stays on, so QA picks elements against the SAME mobile layout they were inspecting. Earlier behavior (turn emulation off during pick) caused the page to snap back to desktop layout mid-pick — confusing UX. Lifecycle still hooked into `startInspector` / `stopInspector`.
 - **Per-tab sessionStorage** — `qa-viewport-w` key. `restoreFromSession()` called from `init()` after content script loads. Survives reloads, resets on tab close.
 - **No DOM wrap CSS** — only `#qa-viewport-chip` rules in content.css. The `#qa-viewport-wrap` rules were removed in v0.6.1.
 - **Manifest order** — `viewport-emulator.js` listed AFTER `inspector.js` so the pause hooks reference the loaded `QA.inspector` module.
